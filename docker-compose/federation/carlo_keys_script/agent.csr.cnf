@@ -1,0 +1,11 @@
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_ext
+prompt = no
+
+[req_distinguished_name]
+CN = webapp agent
+
+[v3_ext]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature
