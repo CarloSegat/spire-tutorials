@@ -7,6 +7,7 @@
 # Binaries
 broker-webapp
 stock-quotes-service
+common-server
 
 # Ignore bundles generated as part of the tutorial
 *.bundle
