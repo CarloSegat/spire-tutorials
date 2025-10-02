@@ -11,14 +11,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spiffe/go-spiffe/v2/logger"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
 const (
-	port       = 8090
-	socketPath = "unix:///tmp/agent.sock"
+	port = 8090
+	socketPath = "unix:///tmp/spire-agent/public/api.sock"
 )
 
 var (
@@ -46,7 +47,7 @@ func main() {
 	x509Src, err := workloadapi.NewX509Source(ctx,
 		workloadapi.WithClientOptions(
 			workloadapi.WithAddr(socketPath),
-			//workloadapi.WithLogger(logger.Std),
+			workloadapi.WithLogger(logger.Std),
 		),
 	)
 	if err != nil {
