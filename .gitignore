@@ -4,8 +4,12 @@
 # Visual Code
 .vscode
 
-# Ignore certs and keys generated as part of the tutorial
-*.pem
-*.crt.pem
-*.key.pem
-*.crt
+# Binaries
+broker-webapp
+stock-quotes-service
+
+# Ignore bundles generated as part of the tutorial
+*.bundle
+
+# goenv 
+.go-version
