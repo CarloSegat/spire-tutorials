@@ -11,6 +11,8 @@ COPY --link --from=alpine:3.17 /bin/sh /bin/sh
 COPY --link --from=alpine:3.17 /bin/ls /bin/ls
 COPY --link --from=alpine:3.17 /lib/ld-musl-x86_64.so.1 /lib/ld-musl-x86_64.so.1
 
+ENV TRUST_DOMAIN_NAME=stockmarket.example
+
 WORKDIR /opt/spire
 ENTRYPOINT []
 CMD common-server
