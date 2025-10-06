@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -11,29 +16,49 @@ import (
 )
 
 const (
-	port       = 8090
-	socketPath = "unix:///tmp/spire-agent/public/api.sock"
+	port         = 8090
+	dlgUrl       = "http://ledger-gateway:8081"
+	federationID = "test"
 )
+var trustDomainName string
+
+// TODO use protobuff to DRY this definition
+type BundleRequest struct {
+	FederationID 		string
+	QualifiedBundle 	QualifiedBundle
+}
+
+type QualifiedBundle struct {
+	RawBundle 			string
+	TrustDomainName 	string
+}
+
+type BundleResponse struct {
+	QualifiedBundles 	[]QualifiedBundle
+}
 
 func main() {
-	log.Print("ciao, I am a server :)")
+	trustDomainName = os.Getenv("TRUST_DOMAIN_NAME")
+	if trustDomainName == "" {
+		panic("need to provide a TRUST_DOMAIN_NAME")
+	}
 
-	// Start spire-server as a child process
 	cmd := exec.Command("/opt/spire/bin/spire-server", "run")
-	cmd.Stdout = os.Stdout  // Pipe spire logs to container stdout
-	cmd.Stderr = os.Stderr  // Pipe errors to container stderr
-	cmd.Stdin = os.Stdin    // Optional: allow input if needed
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
 
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Failed to start spire-server: %v", err)
 	}
 	log.Printf("Started spire-server with PID %d", cmd.Process.Pid)
 
-	// Optional: Add your custom server logic here (e.g., HTTP listener)
-	// For now, just log and wait
-	log.Printf("common-server is now running (would start listener on port %d or socket %s)", port, socketPath)
+	go doBundleStuff()
 
-	// Set up signal handling for graceful shutdown
+	setUpGracefulShutdown(cmd)
+}
+
+func setUpGracefulShutdown(cmd *exec.Cmd) {
 	_, cancel := context.WithCancel(context.Background())
 	go handleSignals(cmd, cancel)
 
@@ -60,4 +85,117 @@ func handleSignals(cmd *exec.Cmd, cancel context.CancelFunc) {
 		log.Printf("Failed to signal spire-server: %v", err)
 	}
 	cancel()
+}
+
+func getMyBundle() string {
+	cmd := exec.Command("/opt/spire/bin/spire-server", "bundle", "show", "-format", "spiffe")
+
+	var result bytes.Buffer
+	cmd.Stdout = &result
+
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	if err := cmd.Run(); err != nil {
+		panic(fmt.Sprint("bundle show command did not work: %s", err))
+	}
+	return result.String()
+}
+
+func PostBundle(federationID string, bundle string) {
+	request := BundleRequest{
+		FederationID: federationID,
+		QualifiedBundle: QualifiedBundle{
+			RawBundle: bundle, 
+			TrustDomainName: trustDomainName,
+		},
+	}
+
+	jsonBody, err := json.Marshal(request)
+
+	if err != nil {
+		panic("cannot marshall the bundle request")
+	}
+
+	resp, err := http.Post(
+		dlgUrl+"/bundle",
+		"application/json",
+		bytes.NewBuffer(jsonBody),
+	)
+
+	if err != nil {
+		panic("cannot post bundle")
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		panic(fmt.Errorf("status code is %d, body %s", resp.StatusCode, string(body)))
+	}
+
+	log.Print("bundle posted succesfully")
+}
+
+func doBundleStuff() {
+	log.Print("sleeping before posting bundle")
+	time.Sleep(3 * time.Second)
+
+	var myBundle = getMyBundle()
+	log.Println("read mybundle", myBundle)
+
+	PostBundle("test", myBundle)
+
+	log.Print("sleeping before fetching bundles")
+	time.Sleep(2 * time.Second)
+
+	var bundles = GetBundles()
+	for i := 0; i < len(bundles); i++ {
+		if myBundle == bundles[i].RawBundle {
+			continue
+		}
+
+		log.Print(
+			"calling bundle set on ", 
+			bundles[i].RawBundle, 
+			" domain ", 
+			bundles[i].TrustDomainName,
+		)
+
+		go doBundleSet(bundles[i].RawBundle, bundles[i].TrustDomainName)
+	}
+
+}
+
+func doBundleSet(rawBundle string, trustDomainName string) {
+	cmd := exec.Command("/opt/spire/bin/spire-server", "bundle", "set", "-format", "spiffe", "-id", trustDomainName)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = bytes.NewBufferString(rawBundle)
+
+	if err := cmd.Run(); err != nil {
+		panic(fmt.Sprint("bundle set command did not work: %s", err))
+	}
+}
+
+func GetBundles() []QualifiedBundle {
+	resp, err := http.Get(dlgUrl + "/bundles/" + federationID)
+	if err != nil {
+		panic("could not fetch the bundlse")
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		panic("unexpected status code while fetching the bundles")
+	}
+
+	var bundleResponse BundleResponse
+
+	if err := json.NewDecoder(resp.Body).Decode(&bundleResponse); err != nil {
+		panic("error while decoding the repsonse from the get bundles")
+	}
+
+	return bundleResponse.QualifiedBundles
 }
