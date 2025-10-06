@@ -34,3 +34,11 @@ services:
       - stock-quotes-service
     ports:
       - 8080:8080
+
+  ledger-gateway:
+    build: ./docker/ledger-gateway
+    hostname: ledger-gateway
+    tty: true
+    privileged: true
+    ports:
+      - 8081:8081
