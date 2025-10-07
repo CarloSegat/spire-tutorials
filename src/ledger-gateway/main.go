@@ -70,15 +70,15 @@ func postBundle(w http.ResponseWriter, r *http.Request) {
 }
 
 func getBundles(w http.ResponseWriter, r *http.Request) {
-	bundleID := strings.TrimPrefix(r.URL.Path, getBundlesEndpoint)
+	federationID := strings.TrimPrefix(r.URL.Path, getBundlesEndpoint)
 
-	if bundleID == "" {
-		http.Error(w, "need to provide ID in the URL", http.StatusBadRequest)
+	if federationID == "" {
+		http.Error(w, "need to provide federation ID in the URL", http.StatusBadRequest)
 	}
 
-	fmt.Println("bundleID ", bundleID)
+	fmt.Println("federationid ", federationID)
 
-	bundles, ok := storage[bundleID]
+	bundles, ok := storage[federationID]
 	if !ok {
 		bundles = []QualifiedBundle{}
 	}
