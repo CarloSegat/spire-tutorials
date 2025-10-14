@@ -13,6 +13,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/kr/pretty"
+	"github.com/spiffe/spire/cmd/spire-server/util"
 )
 
 const (
@@ -20,21 +23,22 @@ const (
 	dlgUrl       = "http://ledger-gateway:8081"
 	federationID = "test"
 )
+
 var trustDomainName string
 
 // TODO use protobuff to DRY this definition
 type BundleRequest struct {
-	FederationID 		string
-	QualifiedBundle 	QualifiedBundle
+	FederationID    string
+	QualifiedBundle QualifiedBundle
 }
 
 type QualifiedBundle struct {
-	RawBundle 			string
-	TrustDomainName 	string
+	RawBundle       string
+	TrustDomainName string
 }
 
 type BundleResponse struct {
-	QualifiedBundles 	[]QualifiedBundle
+	QualifiedBundles []QualifiedBundle
 }
 
 func main() {
@@ -106,7 +110,7 @@ func PostBundle(federationID string, bundle string) {
 	request := BundleRequest{
 		FederationID: federationID,
 		QualifiedBundle: QualifiedBundle{
-			RawBundle: bundle, 
+			RawBundle:       bundle,
 			TrustDomainName: trustDomainName,
 		},
 	}
@@ -139,7 +143,7 @@ func PostBundle(federationID string, bundle string) {
 
 func doBundleStuff() {
 	log.Print("sleeping before posting bundle")
-	time.Sleep(3 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	var myBundle = getMyBundle()
 	log.Println("read mybundle", myBundle)
@@ -147,18 +151,18 @@ func doBundleStuff() {
 	PostBundle("test", myBundle)
 
 	log.Print("sleeping before fetching bundles")
-	time.Sleep(2 * time.Second)
+	time.Sleep(4 * time.Second)
 
 	var bundles = GetBundles()
-	for i := 0; i < len(bundles); i++ {
+	for i := range bundles {
 		if myBundle == bundles[i].RawBundle {
 			continue
 		}
 
 		log.Print(
-			"calling bundle set on ", 
-			bundles[i].RawBundle, 
-			" domain ", 
+			"calling bundle set on ",
+			bundles[i].RawBundle,
+			" domain ",
 			bundles[i].TrustDomainName,
 		)
 
@@ -169,6 +173,19 @@ func doBundleStuff() {
 
 func doBundleSet(rawBundle string, trustDomainName string) {
 	cmd := exec.Command("/opt/spire/bin/spire-server", "bundle", "set", "-format", "spiffe", "-id", trustDomainName)
+
+	okk, err := util.ParseBundle([]byte(rawBundle), "spiffe", trustDomainName)
+	if err != nil {
+		log.Println(fmt.Errorf("parse original bundle: %s", err))
+	}
+	log.Println("pretty")
+	log.Println(fmt.Sprintf("%# v\n", pretty.Formatter(okk)))
+
+	log.Println("okk.String()")
+	log.Println(okk.String())
+
+	log.Println("bytes.NewBufferString(rawBundle).String()")
+	log.Println(bytes.NewBufferString(rawBundle).String())
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

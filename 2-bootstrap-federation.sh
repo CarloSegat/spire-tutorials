@@ -22,3 +22,15 @@ docker compose -f "${DIR}"/docker-compose.yaml exec -T spire-server-stock \
     /opt/spire/bin/spire-server bundle show -format spiffe > "${DIR}"/docker/spire-server-broker.example/conf/stockmarket.example.bundle
 docker compose -f "${DIR}"/docker-compose.yaml exec -T spire-server-broker \
     /opt/spire/bin/spire-server bundle set -format spiffe -id spiffe://stockmarket.example -path /opt/spire/conf/server/stockmarket.example.bundle
+
+
+# docker compose -f ./docker-compose.yaml exec -T spire-server-broker /opt/spire/bin/spire-server bundle show -format spiffe
+# docker compose -f ./docker-compose.yaml exec -T spire-server-stock /opt/spire/bin/spire-server bundle show -format spiffe
+
+# cat docker/spire-server-broker.example/conf/stockmarket.example.bundle| docker compose -f ./docker-compose.yaml exec -T spire-server-broker \ 
+# /opt/spire/bin/spire-server bundle set -format spiffe -id spiffe://stockmarket.example
+
+# cat docker/spire-server-stockmarket.example/conf/broker.example.bundle | docker compose -f ./docker-compose.yaml exec -T spire-server-stock \ 
+# /opt/spire/bin/spire-server bundle set -format spiffe -id spiffe://broker.example
+
+# docker compose -f ./docker-compose.yaml exec -T spire-server-stock /opt/spire/bin/spire-server bundle set -format spiffe -id spiffe://broker.example -path /opt/spire/conf/server/broker.example.bundle
