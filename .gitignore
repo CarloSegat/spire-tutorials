@@ -5,13 +5,16 @@
 .vscode
 
 # Binaries
-broker-webapp
-stock-quotes-service
+*/broker-webapp/broker-webapp
+*/stock-quotes-service/stock-quotes-service
+*/ledger-gateway/ledger-gateway
 common-server
-ledger-gateway
 
 # Ignore bundles generated as part of the tutorial
 *.bundle
 
 # goenv 
 .go-version
+
+
+go.sum
