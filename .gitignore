@@ -25,4 +25,4 @@ bin/spire-agent
 
 *.log
 
-*/data
+data/
