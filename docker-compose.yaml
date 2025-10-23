@@ -16,6 +16,17 @@ services:
     volumes: 
       - ./docker/spire-server-broker.example/conf:/opt/spire/conf/server
 
+  spire-agent-1: 
+    build: ./docker/agent-01
+    hostname: spire-agent-1
+    tty: true
+    privileged: true
+    depends_on: 
+      - "spire-server-broker"
+    volumes:
+      - ./SHARE:/tmp:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
   stock-quotes-service:
     build: ./docker/stock-quotes-service
     hostname: stock-quotes-service
@@ -24,16 +35,17 @@ services:
     links:
       - spire-server-stock
       
-  broker-webapp:
-    build: ./docker/broker-webapp
-    hostname: broker-webapp
-    tty: true
-    privileged: true
-    links:
-      - spire-server-broker
-      - stock-quotes-service
-    ports:
-      - 8080:8080
+  # broker-webapp:
+  #   build: ./docker/broker-webapp
+  #   hostname: broker-webapp
+  #   tty: true
+  #   privileged: true
+  #   depends_on: 
+  #     - "spire-agent-1"
+  #   ports:
+  #     - 8080:8080
+  #   volumes:
+  #     - ./SHARE:/tmp:rw
 
   ledger-gateway:
     build: ./docker/ledger-gateway

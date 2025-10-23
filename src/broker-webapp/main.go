@@ -2,132 +2,99 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
-	"time"
 
-	"broker-webapp/quotes"
+	"sync"
 
-	"github.com/spiffe/go-spiffe/v2/logger"
-	"github.com/spiffe/go-spiffe/v2/spiffeid"
-	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+	"github.com/spiffe/go-spiffe/v2/bundle/jwtbundle"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-const (
-	port       = 8080
-	quotesURL  = "https://stock-quotes-service:8090/quotes"
-	socketPath = "unix:///tmp/spire-agent/public/api.sock"
-)
-
-var (
-	latestQuotes = []*quotes.Quote(nil)
-	latestUpdate = time.Now()
-	// Stock quotes provider SPIFFE ID
-	quotesProviderSpiffeID = spiffeid.RequireFromString("spiffe://stockmarket.example/quotes-service")
-	x509Src                *workloadapi.X509Source
-	bundleSrc              *workloadapi.BundleSource
-)
+const socketPath = "unix:///tmp/spire-agent/public/api.sock"
 
 func main() {
-	log.Print("Webapp waiting for an X.509 SVID...")
+	// time.Sleep(4 * time.Second)
+	ctx, _ := context.WithCancel(context.Background())
 
-	ctx := context.Background()
+	// Start X.509 and JWT watchers
+	startWatchers(ctx)
+}
 
-	var err error
-	x509Src, err = workloadapi.NewX509Source(ctx,
-		workloadapi.WithClientOptions(
-			workloadapi.WithAddr(socketPath),
-			workloadapi.WithLogger(logger.Std),
-		),
-	)
+func startWatchers(ctx context.Context) {
+	var wg sync.WaitGroup
+
+	// Creates a new Workload API client, connecting to provided socket path
+	// Environment variable `SPIFFE_ENDPOINT_SOCKET` is used as default
+	client, err := workloadapi.New(ctx, workloadapi.WithAddr(socketPath))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to create workload API client: %v", err)
 	}
+	defer client.Close()
 
-	log.Print("Webapp waiting for a trust bundle...")
+	wg.Add(1)
+	// Start a watcher for X.509 SVID updates
+	go func() {
+		defer wg.Done()
+		err := client.WatchX509Context(ctx, &x509Watcher{})
+		if err != nil && status.Code(err) != codes.Canceled {
+			log.Fatalf("Error watching X.509 context: %v", err)
+		}
+	}()
 
-	bundleSrc, err = workloadapi.NewBundleSource(ctx,
-		workloadapi.WithClientOptions(
-			workloadapi.WithAddr(socketPath),
-		),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
+	wg.Add(1)
+	// Start a watcher for JWT bundle updates
+	go func() {
+		defer wg.Done()
+		err := client.WatchJWTBundles(ctx, &jwtWatcher{})
+		if err != nil && status.Code(err) != codes.Canceled {
+			log.Fatalf("Error watching JWT bundles: %v", err)
+		}
+	}()
 
-	server := &http.Server{
-		Addr: fmt.Sprintf(":%d", port),
-	}
-	http.HandleFunc("/quotes", quotesHandler)
+	wg.Wait()
+}
 
-	log.Printf("Webapp listening on port %d...", port)
+// x509Watcher is a sample implementation of the workloadapi.X509ContextWatcher interface
+type x509Watcher struct{}
 
-	err = server.ListenAndServe()
-	if err != nil {
-		log.Fatal(err)
+// UpdateX509SVIDs is run every time an SVID is updated
+func (x509Watcher) OnX509ContextUpdate(c *workloadapi.X509Context) {
+	for _, svid := range c.SVIDs {
+		pem, _, err := svid.Marshal()
+		if err != nil {
+			log.Fatalf("Unable to marshal X.509 SVID: %v", err)
+		}
+
+		log.Printf("SVID updated for %q: \n%s\n", svid.ID, string(pem))
 	}
 }
 
-func quotesHandler(resp http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		resp.WriteHeader(http.StatusMethodNotAllowed)
-		return
+// OnX509ContextWatchError is run when the client runs into an error
+func (x509Watcher) OnX509ContextWatchError(err error) {
+	if status.Code(err) != codes.Canceled {
+		log.Printf("OnX509ContextWatchError error: %v", err)
 	}
-
-	data, err := getQuotesData()
-
-	if data != nil {
-		latestQuotes = data
-		latestUpdate = time.Now()
-	} else {
-		data = latestQuotes
-	}
-
-	quotes.Page.Execute(resp, map[string]interface{}{
-		"Data":        data,
-		"Err":         err,
-		"LastUpdated": latestUpdate,
-	})
 }
 
-func getQuotesData() ([]*quotes.Quote, error) {
-	client := http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsconfig.MTLSClientConfig(
-				x509Src, 
-				bundleSrc, 
-				tlsconfig.AuthorizeID(quotesProviderSpiffeID),
-			),
-		},
-	}
+// jwtWatcher is a sample implementation of the workloadapi.JWTBundleWatcher interface
+type jwtWatcher struct{}
 
-	resp, err := client.Get(quotesURL)
-	if err != nil {
-		log.Printf("Error getting quotes: %v", err)
-		return nil, err
+// UpdateX509SVIDs is run every time a JWT Bundle is updated
+func (jwtWatcher) OnJWTBundlesUpdate(bundleSet *jwtbundle.Set) {
+	for _, bundle := range bundleSet.Bundles() {
+		jwt, err := bundle.Marshal()
+		if err != nil {
+			log.Fatalf("Unable to marshal JWT Bundle : %v", err)
+		}
+		log.Printf("jwt bundle updated %q: %s", bundle.TrustDomain(), string(jwt))
 	}
+}
 
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Quotes unavailables: %s", resp.Status)
-		return nil, err
+// OnJWTBundlesWatchError is run when the client runs into an error
+func (jwtWatcher) OnJWTBundlesWatchError(err error) {
+	if status.Code(err) != codes.Canceled {
+		log.Printf("OnJWTBundlesWatchError error: %v", err)
 	}
-
-	jsonData, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Error reading response body: %v", err)
-		return nil, err
-	}
-
-	data := []*quotes.Quote{}
-	err = json.Unmarshal(jsonData, &data)
-	if err != nil {
-		log.Printf("Error unmarshaling json quotes: %v", err)
-		return nil, err
-	}
-
-	return data, nil
 }

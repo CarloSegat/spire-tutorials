@@ -18,3 +18,11 @@ common-server
 
 
 go.sum
+
+bin/
+bin/spire-server
+bin/spire-agent
+
+*.log
+
+*/data
