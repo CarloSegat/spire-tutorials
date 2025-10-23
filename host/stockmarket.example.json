@@ -1,0 +1,23 @@
+{
+  "keys": [
+    {
+      "use": "x509-svid",
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "ITz8NmHDI1vb553h3m-wRtvI2S2SmSjj4kCjII7P5rg",
+      "y": "IdNVLffmYHF5PLlTWSr5Cn97Br7Vkn-I-wgtlk8cKhQ",
+      "x5c": [
+        "MIICCDCCAa2gAwIBAgIQJrvWd7gZRNybsUtJ2ZIQBzAKBggqhkjOPQQDAjBPMQswCQYDVQQGEwJVUzEPMA0GA1UEChMGU1BJRkZFMS8wLQYDVQQFEyY1MTQ4NTk3MzI3MzE1NTEyNjczNDg0Nzk5MDEwMTczNzM0NTAzMTAeFw0yNTEwMjMxNDQ0NTlaFw0yNTEwMjQxNDQ1MDlaME8xCzAJBgNVBAYTAlVTMQ8wDQYDVQQKEwZTUElGRkUxLzAtBgNVBAUTJjUxNDg1OTczMjczMTU1MTI2NzM0ODQ3OTkwMTAxNzM3MzQ1MDMxMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEITz8NmHDI1vb553h3m+wRtvI2S2SmSjj4kCjII7P5rgh01Ut9+ZgcXk8uVNZKvkKf3sGvtWSf4j7CC2WTxwqFKNrMGkwDgYDVR0PAQH/BAQDAgEGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFCTQBAo3IfC1+OWt4FeCfPRGNRSGMCcGA1UdEQQgMB6GHHNwaWZmZTovL3N0b2NrbWFya2V0LmV4YW1wbGUwCgYIKoZIzj0EAwIDSQAwRgIhAItjYXrtvApXz+ddkCmUXWXs7+78kZcFTXkYRuez1rNsAiEAnRwPeKpT0CtoiJtd78/+qPvUqoeakRKHFPAfsQt1lws="
+      ]
+    },
+    {
+      "use": "jwt-svid",
+      "kty": "EC",
+      "kid": "XNjClYepHi3z7kH3zeXesLErSDnn5HGo",
+      "crv": "P-256",
+      "x": "UJwDTcwH_RjVXCZ7xfXjAuZVMauIYaVkZQS8KGHk2K8",
+      "y": "Eqix9gU2uaPil9RzKufg2E57ReHlclYqbtpLg5Y0FiQ"
+    }
+  ],
+  "spiffe_sequence": 1
+}

@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	port               = 8081
+	port               = 8080
 	getBundlesEndpoint = "/bundles/"
 )
 

@@ -7,11 +7,12 @@ nn=$(tput sgr0)
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+
 echo "${bb}Creating registration entry for the broker-webapp...${nn}"
 docker compose -f "${DIR}"/docker-compose.yaml exec -T spire-server-broker bin/spire-server entry create \
 	-parentID spiffe://broker.example/spire/agent/x509pop/broker.example \
 	-spiffeID spiffe://broker.example/webapp \
-	-selector unix:uid:0 \
+	-selector unix:user:carlo \
 	-federatesWith "spiffe://stockmarket.example"
 
 echo "${bb}Creating registration entry for the stock-quotes-service...${nn}"

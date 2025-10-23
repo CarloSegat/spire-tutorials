@@ -25,3 +25,6 @@ docker compose -f "${DIR}"/docker-compose.yaml exec -d broker-webapp bin/spire-a
 # Start up the stock-quotes-service SPIRE agent.
 echo "${bb}Starting stock-quotes-service SPIRE agent...${nn}"
 docker compose -f "${DIR}"/docker-compose.yaml exec -d stock-quotes-service bin/spire-agent run
+
+
+docker compose -f ./docker-compose.yaml exec -d spire-agent-1 bin/spire-agent run
