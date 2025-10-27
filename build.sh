@@ -19,3 +19,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 
 docker compose -f "${DIR}"/docker-compose.yaml build
+
+
+
+CGO_ENABLED=0 GOOS=linux go build -v

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"strconv"
 
 	"sync"
 
@@ -12,9 +14,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const socketPath = "unix:///tmp/spire-agent/public/api.sock"
+var socketPath = "unix:///tmp/spire-agent/public/api.sock"
+var myPort = 8000
 
 func main() {
+	argsss := os.Args[1:]
+
+	socketPath = argsss[0]
+	myPort, err := strconv.Atoi(argsss[1])
+	if err != nil {
+        panic(err)
+    }
+
 	// time.Sleep(4 * time.Second)
 	ctx, _ := context.WithCancel(context.Background())
 
