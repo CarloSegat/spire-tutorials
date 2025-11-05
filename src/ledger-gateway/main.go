@@ -52,6 +52,7 @@ func postBundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+
 	if _, ok := storage[bundleReq.FederationID]; !ok {
 		storage[bundleReq.FederationID] = []QualifiedBundle{}
 	}
