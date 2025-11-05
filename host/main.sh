@@ -1,5 +1,10 @@
 #!/bin/sh
 
+if [ $# -eq 0 ]; then
+    echo "Error: First argument is required." >&2
+    exit 1
+fi
+
 create_single_agent() {
     local num="$1"
     local agent_num="$2"
@@ -26,14 +31,18 @@ DIR="$(dirname $SCRIPT_PATH)"
 
 export NUM="$1"
 
+
+
 # delete all data folders or the agents will try to reuse the svids, which will not be valid (because in insecure mode)
-find "$DIR"/server/"$NUM" -type d -name "data" -exec rm -rf {} +
-find "$DIR"/agent/"$NUM"-1 -type d -name "data" -exec rm -rf {} +
-find "$DIR"/agent/"$NUM"-2 -type d -name "data" -exec rm -rf {} +
+find "$DIR"/server/"$NUM" -delete
+find "$DIR"/agent/"$NUM"-1 -delete
+find "$DIR"/agent/"$NUM"-2 -delete
+find "$DIR"/workloads/"$NUM"-1 -delete
+find "$DIR"/workloads/"$NUM"-2 -delete
 
 export PORT=$(( 8080 + (NUM * 4 - 3)))
 export FED_PORT=$(( PORT + 1 ))
-export DOMAIN="$NUM".example.snet
+export DOMAIN="$NUM".snet.example
 
 mkdir -p "$DIR"/server"/$NUM"
 openssl genrsa -out server.key 2048
@@ -42,26 +51,31 @@ openssl req -new -x509 -key server.key -out agent-cacert.pem -days 3650 -subj "/
 
 cp "$DIR"/agent-cacert.pem "$DIR"/server/"$NUM"/agent-cacert.pem
 "$DIR"/bin/spire-server run -expandEnv -config "$DIR"/server/server.conf &
-pids="$!"
+
+
+
 
 export AGENT_NUM="$NUM"-1
-pid1=$(create_single_agent "$NUM" "$AGENT_NUM")
-pids="$pids $pid1"
+create_single_agent "$NUM" "$AGENT_NUM"
 
 export W1_PORT=$(( PORT + 2 ))
-"$DIR"/bin/broker-webapp unix://"$DIR"/host/agent/"$AGENT_NUM"/api.sock "$W1_PORT"
+export SPIFFE_ENDPOINT_SOCKET=unix://"$DIR"/agent/"$AGENT_NUM"/api.sock
+mkdir -p "$DIR"/workloads"/$AGENT_NUM"
+"$DIR"/bin/broker-webapp "$W1_PORT" "$DIR"/workloads"/$AGENT_NUM" &
+
 
 
 
 export AGENT_NUM="$NUM"-2
-pid2=$(create_single_agent "$NUM" "$AGENT_NUM")
-pids="$pids $pid2"
+create_single_agent "$NUM" "$AGENT_NUM"
 
 export W2_PORT=$(( PORT + 3 ))
-"$DIR"/bin/broker-webapp unix://"$DIR"/host/agent/"$AGENT_NUM"/api.sock "$W2_PORT"
+export SPIFFE_ENDPOINT_SOCKET=unix://"$DIR"/agent/"$AGENT_NUM"/api.sock
+mkdir -p "$DIR"/workloads"/$AGENT_NUM"
+"$DIR"/bin/broker-webapp "$W2_PORT" "$DIR"/workloads"/$AGENT_NUM" &
 
-echo $pids
+./register_entries.sh "$NUM"
 
+find . -name '[server|agent].*[pem|csr|key|srl]' -delete
 
-
-
+find . -maxdepth 1 -regextype posix-extended -regex '.*/(server|agent).*(pem|key|csr|srl)' -type f -delete

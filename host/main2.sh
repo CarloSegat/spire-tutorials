@@ -12,7 +12,6 @@
 ./2_create_federation_dynamic.sh 1 stockmarket.example 8084
 
 
-./3_registration_entries.sh 1 1 broker.example stockmarket.example 
+# ./3_registration_entries.sh 1 1 broker.example stockmarket.example 
+# ./3_registration_entries.sh 2 1 stockmarket.example broker.example 
 
-
-./3_registration_entries.sh 2 1 stockmarket.example broker.example 

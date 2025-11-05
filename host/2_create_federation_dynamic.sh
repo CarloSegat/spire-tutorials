@@ -4,8 +4,9 @@ SCRIPT_PATH="$(realpath "$0")"
 DIR="$(dirname $SCRIPT_PATH)"
 
 NUM="$1"
-TRUST_DOMAIN_NAME="$2"
-FED_PORT="$3"
+OTHER_NUM="$2"
+FED_PORT=$(( 8080 + ($OTHER_NUM * 4 - 3 + 1)))
+TRUST_DOMAIN_NAME="$OTHER_NUM".snet.example
 
 "$DIR"/bin/spire-server federation create \
     -socketPath /home/carlo/spire-tutorials/host/server/"$NUM"/api.sock \

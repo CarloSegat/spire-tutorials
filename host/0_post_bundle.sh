@@ -5,7 +5,7 @@ SCRIPT_PATH="$(realpath "$0")"
 DIR="$(dirname $SCRIPT_PATH)"
 
 NUM="$1"
-TRUST_DOMAIN_NAME="$2"
+TRUST_DOMAIN_NAME="$NUM".snet.example
 
 BUNDLE=$("$DIR"/bin/spire-server bundle show -format spiffe -socketPath "$DIR"/server/"$NUM"/api.sock )
 

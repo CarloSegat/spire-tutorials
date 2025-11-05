@@ -3,7 +3,7 @@
 ## Useful commands
 
 Bundles
-`docker compose -f ./docker-compose.yaml exec -T spire-server-broker bin/spire-server bundle show` 
+`docker compose -f ./docker-compose.yaml exec -T spire-server-broker bin/spire-server bundle show`
 
 `docker compose -f ./docker-compose.yaml exec -T spire-server-broker /opt/spire/bin/spire-server bundle show -format spiffe >`
 
@@ -23,3 +23,6 @@ Dynamic federation creation
         #         endpoint_spiffe_id = "spiffe://broker.example/spire/server"
         #     }
         # }
+
+
+./bin/spire-server entry update -entryID c21b0f87-6cd3-48e7-848e-af30885f534f -socketPath /home/carlo/spire-tutorials/host/server/1/api.sock -federatesWith spiffe://2.example.snet -selector unix:user:carlo -parentID spiffe://1.example.snet/spire/agent/x509pop/1.example.snet/1-2
