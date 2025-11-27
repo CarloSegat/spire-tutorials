@@ -3,8 +3,8 @@
 SCRIPT_PATH="$(realpath "$0")"
 DIR="$(dirname $SCRIPT_PATH)"
 
-cd "$DIR"/../src/broker-webapp
+cd "$DIR"/../src/example-workload
 
 CGO_ENABLED=0 GOOS=linux go build -v
 
-mv ./broker-webapp "$DIR"/bin
+mv ./example-workload "$DIR"/bin
