@@ -2,4 +2,4 @@
 
 pkill spire-server
 pkill spire-agent
-pkill broker-webapp
+pkill example-w

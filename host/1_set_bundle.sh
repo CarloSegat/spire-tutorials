@@ -41,7 +41,7 @@ else
     echo "No matching files found (pattern: [0-9][0-9].snet.example.json)"
 fi
 
-find . -name '[0-9]*.snet.json' -delete
+find . -name '[0-9]*.snet.example.json' -delete
 
 # ./1_set_bundle.sh 2 broker.example
 # ./1_set_bundle.sh 1 stockmarket.example

@@ -1,4 +1,4 @@
-module broker-webapp
+module example-workload
 
 go 1.24.0
 

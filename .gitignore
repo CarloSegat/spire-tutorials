@@ -5,7 +5,7 @@
 .vscode
 
 # Binaries
-*/broker-webapp/broker-webapp
+*/example-workload/example-workload
 */stock-quotes-service/stock-quotes-service
 */ledger-gateway/ledger-gateway
 common-server

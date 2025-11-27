@@ -1,7 +1,12 @@
 #!/bin/sh
 
 if [ $# -eq 0 ]; then
-    echo "Error: First argument is required." >&2
+    echo "Error: first argument must be this server number" >&2
+    exit 1
+fi
+
+if [ $# -eq 1 ]; then
+    echo "Error: second argument must be max server number." >&2
     exit 1
 fi
 
@@ -30,6 +35,7 @@ SCRIPT_PATH="$(realpath "$0")"
 DIR="$(dirname $SCRIPT_PATH)"
 
 export NUM="$1"
+export MAX_NUM="$2"
 
 
 
@@ -40,11 +46,11 @@ find "$DIR"/agent/"$NUM"-2 -delete
 find "$DIR"/workloads/"$NUM"-1 -delete
 find "$DIR"/workloads/"$NUM"-2 -delete
 
-export PORT=$(( 8080 + (NUM * 4 - 3)))
+export PORT=$(( 8080 + (NUM * 6 - 5)))
 export FED_PORT=$(( PORT + 1 ))
 export DOMAIN="$NUM".snet.example
 
-mkdir -p "$DIR"/server"/$NUM"
+mkdir -p "$DIR"/server/"$NUM"
 openssl genrsa -out server.key 2048
 rm -f "$DIR"/agent-cacert.pem
 openssl req -new -x509 -key server.key -out agent-cacert.pem -days 3650 -subj "/CN=SPIRE SERVER CA"
@@ -58,10 +64,15 @@ cp "$DIR"/agent-cacert.pem "$DIR"/server/"$NUM"/agent-cacert.pem
 export AGENT_NUM="$NUM"-1
 create_single_agent "$NUM" "$AGENT_NUM"
 
-export W1_PORT=$(( PORT + 2 ))
 export SPIFFE_ENDPOINT_SOCKET=unix://"$DIR"/agent/"$AGENT_NUM"/api.sock
-mkdir -p "$DIR"/workloads"/$AGENT_NUM"
-"$DIR"/bin/broker-webapp "$W1_PORT" "$DIR"/workloads"/$AGENT_NUM" &
+
+export W1_PORT=$(( PORT + 2 ))
+mkdir -p "$DIR"/workloads/"$NUM"/1
+"$DIR"/bin/example-workload "$W1_PORT" "$DIR"/workloads/"$NUM"/1 "$NUM" "$MAX_NUM" &
+
+export W2_PORT=$(( PORT + 3 ))
+mkdir -p "$DIR"/workloads/"$NUM"/2
+"$DIR"/bin/example-workload "$W2_PORT" "$DIR"/workloads/"$NUM"/2 "$NUM" "$MAX_NUM" &
 
 
 
@@ -69,10 +80,16 @@ mkdir -p "$DIR"/workloads"/$AGENT_NUM"
 export AGENT_NUM="$NUM"-2
 create_single_agent "$NUM" "$AGENT_NUM"
 
-export W2_PORT=$(( PORT + 3 ))
 export SPIFFE_ENDPOINT_SOCKET=unix://"$DIR"/agent/"$AGENT_NUM"/api.sock
-mkdir -p "$DIR"/workloads"/$AGENT_NUM"
-"$DIR"/bin/broker-webapp "$W2_PORT" "$DIR"/workloads"/$AGENT_NUM" &
+
+export W3_PORT=$(( PORT + 4 ))
+mkdir -p "$DIR"/workloads/"$NUM"/3
+"$DIR"/bin/example-workload "$W3_PORT" "$DIR"/workloads/"$NUM"/3 "$NUM" "$MAX_NUM" &
+
+export W4_PORT=$(( PORT + 5 ))
+mkdir -p "$DIR"/workloads/"$NUM"/4
+"$DIR"/bin/example-workload "$W4_PORT" "$DIR"/workloads/"$NUM"/4 "$NUM" "$MAX_NUM" &
+
 
 ./register_entries.sh "$NUM"
 
