@@ -2,7 +2,7 @@
 #!/bin/sh
 
 SCRIPT_PATH="$(realpath "$0")"
-DIR="$(dirname "$SCRIPT_PATH")"
+DIR="/home/carlo/spire-tutorials/artefacts"
 
 MY_NUM=$1
 OTHER_NUM=$2
@@ -21,7 +21,7 @@ do
 
     "$DIR"/bin/spire-server entry update \
 	-entryID "$ENTRY_ID" \
-	-socketPath /home/carlo/spire-tutorials/host/server/"$MY_NUM"/api.sock \
+	-socketPath /home/carlo/spire-tutorials/artefacts/server/"$MY_NUM"/api.sock \
 	-federatesWith spiffe://"$OTHER_NUM".snet.example \
 	-selector unix:user:carlo \
 	-parentID "$PARENT_ID" \

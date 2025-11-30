@@ -1,6 +1,6 @@
 #!/bin/sh
 SCRIPT_PATH="$(realpath "$0")"
-DIR="$(dirname "$SCRIPT_PATH")"
+DIR="/home/carlo/spire-tutorials/artefacts"
 
 NUM="$1"
 # TRUST_DOMAIN_NAME="$2"
@@ -15,7 +15,7 @@ printf '%s' "$RESPONSE" > response_raw.json
 python3 ./split_raw_response.py
 
 
-rm response_raw.json
+# rm response_raw.json
 
 
 matching_files=$(ls [0-9].snet.example.json [0-9][0-9].snet.example.json 2>/dev/null)

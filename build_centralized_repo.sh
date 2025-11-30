@@ -3,8 +3,8 @@
 SCRIPT_PATH="$(realpath "$0")"
 DIR="$(dirname $SCRIPT_PATH)"
 
-cd "$DIR"/../src/ledger-gateway
+cd "$DIR"/../src/centralized-repo
 
 CGO_ENABLED=0 GOOS=linux go build -v
 
-mv ./ledger-gateway "$DIR"/bin
+mv ./centralized-repo "$DIR"/bin

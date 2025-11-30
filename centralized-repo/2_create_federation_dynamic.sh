@@ -1,15 +1,15 @@
 #/bin/sh
 
 SCRIPT_PATH="$(realpath "$0")"
-DIR="$(dirname $SCRIPT_PATH)"
+DIR="/home/carlo/spire-tutorials/artefacts"
 
 NUM="$1"
 OTHER_NUM="$2"
-FED_PORT=$(( 8080 + ($OTHER_NUM * 4 - 3 + 1)))
+FED_PORT=$(( 8080 + ($OTHER_NUM * 6 - 4)))
 TRUST_DOMAIN_NAME="$OTHER_NUM".snet.example
 
 "$DIR"/bin/spire-server federation create \
-    -socketPath /home/carlo/spire-tutorials/host/server/"$NUM"/api.sock \
+    -socketPath /home/carlo/spire-tutorials/artefacts/server/"$NUM"/api.sock \
     -bundleEndpointProfile https_spiffe \
     -trustDomain $TRUST_DOMAIN_NAME \
     -bundleEndpointURL https://localhost:"$FED_PORT" \

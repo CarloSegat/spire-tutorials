@@ -9,15 +9,17 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"sync"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
-        "github.com/spiffe/go-spiffe/v2/spiffeid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -25,10 +27,11 @@ import (
 var log *logrus.Logger
 var myServerNumber int
 var maxServerNumber int
+var myPort int
 
 func main() {
 	if len(os.Args) != 5 {
-	    panic("need 5 arguments")
+		panic("need 5 arguments")
 	}
 
 	ctx, _ := context.WithCancel(context.Background())
@@ -38,34 +41,48 @@ func main() {
 
 	log.Printf("Starting workload, spiffe unix is %s", os.Getenv("SPIFFE_ENDPOINT_SOCKET"))
 
-
-	myPort, _ := strconv.Atoi(os.Args[1])
+	myPort, _ = strconv.Atoi(os.Args[1])
 	myServerNumber, _ = strconv.Atoi(os.Args[3])
 	maxServerNumber, _ = strconv.Atoi(os.Args[4])
 
-
 	log.Printf("workload port: %d", myPort)
 
-	// source, err := workloadapi.NewX509Source(ctx)
-	// if err != nil {
-	// 	log.Errorf("unable to create X509Source: %s", err)
-	// 	panic(err)
-	// }
-	// defer source.Close()
-
-	// log.Printf("got source: %s", source)
+	time.Sleep(2 * time.Second)
+	
 	go startWatchers(ctx)
-
+	
 	go listenn(ctx, myPort)
-
+	
+	wg := sync.WaitGroup{}
+	
+	// internal comms
 	theirPorts := makeArray(myPort)
 	log.Println("their ports", theirPorts)
-
+	
 	for _, theirPort := range theirPorts {
-	    go talk(ctx, theirPort)
+		wg.Add(1)
+		go talk(ctx, theirPort, &wg)
 	}
 
+	wg.Wait()
+	
+	log.Println(">>> 30 seconds before")
+	time.Sleep(5 * time.Second)
+	log.Println(">>> 30 seconds after")
+	
+	// external comms
+	
+	for _, theirPort := range generateExternalPorts(myServerNumber, maxServerNumber) {
+		wg.Add(1)
+		go talk(ctx, theirPort, &wg)
+	}
+	wg.Wait()
+	log.Println("Every message was sent, terminating workload")
+	
+	// defer wg.Wait()
 	select {}
+
+
 
 }
 
@@ -82,39 +99,55 @@ func initLoggerToFile(log *logrus.Logger, logPath string) {
 	log.SetOutput(wrt)
 }
 
-func makeArray(n int) []int {
-    // Compute the base of the block n belongs to.
-    // Each block is size 4, spaced by 6.
-    blockOffset := (n - 8083) / 6  // which block number?
-    base := 8083 + blockOffset*6   // starting value of the block
+func makeArray(port int) []int {
+	// Compute the base of the block n belongs to.
+	// Each block is size 4, spaced by 6.
+	blockOffset := (port - 8083) / 6 // which block number?
+	base := 8083 + blockOffset*6  // starting value of the block
 
-    result := []int{}
-    for i := 0; i < 4; i++ {
-        v := base + i
-        if v != n {
-            result = append(result, v)
-        }
-    }
-    return result
+	result := []int{}
+	for i := 0; i < 4; i++ {
+		v := base + i
+		if v != port {
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
-func talk(ctx context.Context, theirPort int) {
+func talk(ctx context.Context, theirPort int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	theirAddress := fmt.Sprintf("127.0.0.1:%d", theirPort)
 	log.Printf("Talking setting up on address %s", theirAddress)
-	conn, err := spiffetls.Dial(ctx,
-		"tcp",
-		theirAddress,
-		tlsconfig.AuthorizeAny(),
-	)
-	if err != nil {
-		panic(fmt.Errorf("unable to create TLS connection: %w", err))
+
+	var conn net.Conn
+	var err error 
+	for{
+		conn, err = spiffetls.Dial(ctx,
+			"tcp",
+			theirAddress,
+			tlsconfig.AuthorizeAny(),
+		)
+		if err == nil {
+			break
+			// log.Printf("unable to create TLS connection: %w", err)
+		}
+		select {
+			case <-ctx.Done():
+				log.Warnf("Context canceled for %s: %v", theirAddress, ctx.Err())
+				return // Bail out.
+			case <-time.After(500 * time.Millisecond): // Short sleep.
+        }
+		
 	}
 	defer conn.Close()
 
 	log.Printf("Attempting to talk to %s", theirAddress)
 
 	// Send a message to the server using the TLS connection
-	fmt.Fprintf(conn, "ping\n")
+
+	fmt.Fprintf(conn, "ping from %d\n", myPort)
 
 	log.Printf("Sent ping to %s, waiting for pong", theirAddress)
 
@@ -175,32 +208,32 @@ func startWatchers(ctx context.Context) {
 
 // x509Watcher is a sample implementation of the workloadapi.X509ContextWatcher interface
 // type x509Watcher struct{}
-type MyBundleWatcher struct {}
+type MyBundleWatcher struct{}
 
-func (MyBundleWatcher) OnX509BundlesUpdate(boh *x509bundle.Set){
-    log.Println("509 update called", boh)
+func (MyBundleWatcher) OnX509BundlesUpdate(boh *x509bundle.Set) {
+	log.Println("509 update called", boh)
 
-    myTrustDomain, err := spiffeid.TrustDomainFromString( deduceServerSpiffeID(myServerNumber) )
-    if err != nil {
-        log.Println("could not create trust domain object")
-	panic("could not create trust domain object")
-    }
+	myTrustDomain, err := spiffeid.TrustDomainFromString(deduceServerSpiffeID(myServerNumber))
+	if err != nil {
+		log.Println("could not create trust domain object")
+		panic("could not create trust domain object")
+	}
 
-    myBundle, present:= boh.Get(myTrustDomain)
-    if ! present {
-	log.Println("bundle not found")
-	panic("bundle not found")
-    }
+	myBundle, present := boh.Get(myTrustDomain)
+	if !present {
+		log.Println("bundle not found")
+		panic("bundle not found")
+	}
 
-    log.Println("showing my bundle")
-    log.Println("X509Authorities", len(myBundle.X509Authorities()))
+	log.Println("showing my bundle")
+	log.Println("X509Authorities", len(myBundle.X509Authorities()))
 
-    log.Println(myBundle)
+	log.Println(myBundle)
 
 }
 
-func (MyBundleWatcher) OnX509BundlesWatchError(err error){
-    log.Println("got somthing erroneous", err)
+func (MyBundleWatcher) OnX509BundlesWatchError(err error) {
+	log.Println("got somthing erroneous", err)
 }
 
 func handleConnection(conn net.Conn) {
@@ -209,6 +242,9 @@ func handleConnection(conn net.Conn) {
 	// Read incoming data into buffer
 	req, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
+		if strings.Contains(err.Error(), "bad certificate"){
+			return
+		}
 		log.Printf("Error reading incoming data: %v", err)
 		return
 	}
@@ -221,6 +257,19 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-func deduceServerSpiffeID(myServerNumber int) (string) {
-    return fmt.Sprintf("%d.snet.example", myServerNumber)
+func deduceServerSpiffeID(myServerNumber int) string {
+	return fmt.Sprintf("%d.snet.example", myServerNumber)
+}
+
+func generateExternalPorts(myServer int, maxServer int) []int {
+	result := []int{}
+	for num := range maxServer {
+		if num+1 == myServer {
+			continue
+		}
+		base := 8083 + num*6 // starting value of the block
+
+		result = append(result, base, base+1, base+2, base+3)
+	}
+	return result
 }

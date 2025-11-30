@@ -17,22 +17,21 @@ create_single_agent() {
     mkdir -p "$DIR"/agent/"$agent_num"
     openssl genrsa -out "agent-$num.key" 2048
     openssl req -new -key "agent-$num.key" -out "agent-$num.csr" -subj "/CN=$agent_num" -config agent.csr.cnf -extensions v3_ext
-    openssl x509 -req -in "agent-$num.csr" -CA "$DIR"/agent-cacert.pem -CAkey server.key -CAcreateserial -out "agent-$num.crt.pem" -days 365 -sha256 -extfile agent.csr.cnf -extensions v3_ext
-    cp "$DIR"/"agent-$num.crt.pem" "$DIR"/agent/"$agent_num"/agent.crt.pem
-    cp "$DIR"/"agent-$num.key" "$DIR"/agent/"$agent_num"/agent.key.pem
+    openssl x509 -req -in "agent-$num.csr" -CA ./agent-cacert.pem -CAkey server.key -CAcreateserial -out "agent-$num.crt.pem" -days 365 -sha256 -extfile agent.csr.cnf -extensions v3_ext
+    echo "JOHJOHJHJOOHOHO"
+    cp ./agent-$num.crt.pem "$DIR"/agent/"$agent_num"/agent.crt.pem
+    cp ./agent-$num.key "$DIR"/agent/"$agent_num"/agent.key.pem
     # "$DIR"/bin/spire-agent run -expandEnv -config "$DIR"/agent/agent.conf &
     # local pid=$!  # Capture the PID of the background spire-agent process
     # echo "$pid"
-    "$DIR"/bin/spire-agent run -expandEnv -config "$DIR"/agent/agent.conf \
+    "$DIR"/bin/spire-agent run -expandEnv -config ./agent.conf \
         >/dev/null 2>&1 </dev/null &
     pid=$!
     echo "$pid"
 }
 
 
-
-SCRIPT_PATH="$(realpath "$0")"
-DIR="$(dirname $SCRIPT_PATH)"
+DIR="/home/carlo/spire-tutorials/artefacts"
 
 export NUM="$1"
 export MAX_NUM="$2"
@@ -43,8 +42,7 @@ export MAX_NUM="$2"
 find "$DIR"/server/"$NUM" -delete
 find "$DIR"/agent/"$NUM"-1 -delete
 find "$DIR"/agent/"$NUM"-2 -delete
-find "$DIR"/workloads/"$NUM"-1 -delete
-find "$DIR"/workloads/"$NUM"-2 -delete
+find "$DIR"/workloads/"$NUM" -delete
 
 export PORT=$(( 8080 + (NUM * 6 - 5)))
 export FED_PORT=$(( PORT + 1 ))
@@ -52,11 +50,11 @@ export DOMAIN="$NUM".snet.example
 
 mkdir -p "$DIR"/server/"$NUM"
 openssl genrsa -out server.key 2048
-rm -f "$DIR"/agent-cacert.pem
+rm -f ./agent-cacert.pem
 openssl req -new -x509 -key server.key -out agent-cacert.pem -days 3650 -subj "/CN=SPIRE SERVER CA"
 
-cp "$DIR"/agent-cacert.pem "$DIR"/server/"$NUM"/agent-cacert.pem
-"$DIR"/bin/spire-server run -expandEnv -config "$DIR"/server/server.conf &
+cp ./agent-cacert.pem "$DIR"/server/"$NUM"/agent-cacert.pem
+"$DIR"/bin/spire-server run -expandEnv -config ./server.conf &
 
 
 
@@ -91,7 +89,7 @@ mkdir -p "$DIR"/workloads/"$NUM"/4
 "$DIR"/bin/example-workload "$W4_PORT" "$DIR"/workloads/"$NUM"/4 "$NUM" "$MAX_NUM" &
 
 
-./register_entries.sh "$NUM"
+./register_agents_entries.sh "$NUM" "$DIR"
 
 find . -name '[server|agent].*[pem|csr|key|srl]' -delete
 

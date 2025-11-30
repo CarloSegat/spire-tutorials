@@ -2,7 +2,7 @@
 
 SCRIPT_PATH="$(realpath "$0")"
 
-DIR="$(dirname $SCRIPT_PATH)"
+DIR="/home/carlo/spire-tutorials/artefacts"
 
 NUM="$1"
 TRUST_DOMAIN_NAME="$NUM".snet.example
