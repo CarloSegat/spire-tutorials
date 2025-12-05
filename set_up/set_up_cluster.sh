@@ -36,14 +36,6 @@ DIR="/home/carlo/spire-tutorials/artefacts"
 export NUM="$1"
 export MAX_NUM="$2"
 
-
-
-# delete all data folders or the agents will try to reuse the svids, which will not be valid (because in insecure mode)
-find "$DIR"/server/"$NUM" -delete
-find "$DIR"/agent/"$NUM"-1 -delete
-find "$DIR"/agent/"$NUM"-2 -delete
-find "$DIR"/workloads/"$NUM" -delete
-
 export PORT=$(( 8080 + (NUM * 6 - 5)))
 export FED_PORT=$(( PORT + 1 ))
 export DOMAIN="$NUM".snet.example
