@@ -67,7 +67,7 @@ func main() {
 	wg.Wait()
 	
 	log.Println(">>> 30 seconds before")
-	time.Sleep(5 * time.Second)
+	time.Sleep(12 * time.Second)
 	log.Println(">>> 30 seconds after")
 	
 	// external comms
@@ -149,14 +149,14 @@ func talk(ctx context.Context, theirPort int, wg *sync.WaitGroup) {
 
 	fmt.Fprintf(conn, "ping from %d\n", myPort)
 
-	log.Printf("Sent ping to %s, waiting for pong", theirAddress)
+	log.Printf("Sent ping to %s", theirAddress)
 
 	// Read server response
-	status, err := bufio.NewReader(conn).ReadString('\n')
-	if err != nil && err != io.EOF {
-		panic(fmt.Errorf("unable to read server response: %w", err))
-	}
-	log.Printf("Other workload says: %q", status)
+	// status, err := bufio.NewReader(conn).ReadString('\n')
+	// if err != nil && err != io.EOF {
+	// 	panic(fmt.Errorf("unable to read server response: %w", err))
+	// }
+	// log.Printf("Other workload says: %q", status)
 }
 
 func listenn(ctx context.Context, myPort int) {
@@ -243,12 +243,13 @@ func handleConnection(conn net.Conn) {
 	req, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
 		if strings.Contains(err.Error(), "bad certificate"){
+			// log.Printf("Certificate error: %v", err)
 			return
 		}
 		log.Printf("Error reading incoming data: %v", err)
 		return
 	}
-	log.Printf("Client says: %q", req)
+	log.Printf("Received message: %q", req)
 
 	// Send a response back to the other workload
 	if _, err = conn.Write([]byte("Pong\n")); err != nil {
