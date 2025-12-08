@@ -3,8 +3,8 @@
 SCRIPT_PATH="$(realpath "$0")"
 DIR="$(dirname $SCRIPT_PATH)"
 
-cd "$DIR"/../src/centralized-repo
+cd ./src/centralized-repo
 
-CGO_ENABLED=0 GOOS=linux go build -v
+CGO_ENABLED=0 GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -v
 
-mv ./centralized-repo "$DIR"/bin
+mv ./centralized-repo "$DIR"/artefacts/bin
