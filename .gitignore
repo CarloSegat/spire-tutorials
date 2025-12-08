@@ -24,3 +24,10 @@ artefacts/
 *.log
 
 data/
+
+node_modules/
+
+
+*.pem
+*.csr
+*.key

@@ -1,8 +1,9 @@
 
 #!/bin/sh
 
-SCRIPT_PATH="$(realpath "$0")"
-DIR="/home/carlo/spire-tutorials/artefacts"
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
+BASE_DIR="$(echo "$SCRIPT_PATH" | sed -n 's#^\(.*spire-tutorials\).*#\1#p')"
+DIR="$BASE_DIR"/artefacts
 
 MY_NUM=$1
 OTHER_NUM=$2
@@ -27,8 +28,8 @@ do
 
     "$DIR"/bin/spire-server entry update \
 	-entryID "$ENTRY_ID" \
-	-socketPath /home/carlo/spire-tutorials/artefacts/server/"$MY_NUM"/api.sock \
-	-selector unix:user:carlo \
+	-socketPath "$DIR"/server/"$MY_NUM"/api.sock \
+	-selector unix:user:"$USER" \
 	-parentID "$PARENT_ID" \
 	-spiffeID "$SPIFFE_ID" \
     $FEDERATES_WITH_FLAGS 

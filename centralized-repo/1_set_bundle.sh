@@ -1,6 +1,7 @@
 #!/bin/sh
-SCRIPT_PATH="$(realpath "$0")"
-DIR="/home/carlo/spire-tutorials/artefacts"
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
+BASE_DIR="$(echo "$SCRIPT_PATH" | sed -n 's#^\(.*spire-tutorials\).*#\1#p')"
+DIR="$BASE_DIR"/artefacts
 
 NUM="$1"
 # TRUST_DOMAIN_NAME="$2"

@@ -30,9 +30,11 @@ create_single_agent() {
     echo "$pid"
 }
 
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
+BASE_DIR="$(echo "$SCRIPT_PATH" | sed -n 's#^\(.*spire-tutorials\).*#\1#p')"
+DIR="$BASE_DIR"/artefacts
 
-DIR="/home/carlo/spire-tutorials/artefacts"
-
+export DIR
 export NUM="$1"
 export MAX_NUM="$2"
 
