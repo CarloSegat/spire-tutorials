@@ -13,8 +13,8 @@ const (
 )
 
 type BundleRequest struct {
-	FederationID    string
-	QualifiedBundle QualifiedBundle
+	FederationID    string `json:"FederationID"`
+	QualifiedBundle QualifiedBundle `json:"QualifiedBundle"`
 }
 
 type QualifiedBundle struct {
@@ -39,7 +39,8 @@ func main() {
 func postBundle(w http.ResponseWriter, r *http.Request) {
 	var bundleReq BundleRequest
 	if err := json.NewDecoder(r.Body).Decode(&bundleReq); err != nil {
-		http.Error(w, "empty body", http.StatusBadRequest)
+		fmt.Println(err)
+		http.Error(w, "Error decoding the body", http.StatusBadRequest)
 		return
 	}
 

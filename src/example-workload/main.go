@@ -102,8 +102,8 @@ func initLoggerToFile(log *logrus.Logger, logPath string) {
 func makeArray(port int) []int {
 	// Compute the base of the block n belongs to.
 	// Each block is size 4, spaced by 6.
-	blockOffset := (port - 8083) / 6 // which block number?
-	base := 8083 + blockOffset*6  // starting value of the block
+	blockOffset := (port - 8084) / 6 // which block number?
+	base := 8084 + blockOffset*6  // starting value of the block
 
 	result := []int{}
 	for i := 0; i < 4; i++ {
@@ -268,7 +268,7 @@ func generateExternalPorts(myServer int, maxServer int) []int {
 		if num+1 == myServer {
 			continue
 		}
-		base := 8083 + num*6 // starting value of the block
+		base := 8084 + num*6 // starting value of the block
 
 		result = append(result, base, base+1, base+2, base+3)
 	}
