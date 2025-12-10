@@ -6,7 +6,7 @@ DIR="$BASE_DIR"/artefacts
 
 NUM="$1"
 OTHER_NUM="$2"
-FED_PORT=$(( 8080 + ($OTHER_NUM * 6 - 4)))
+FED_PORT=$(( 8083 + ($OTHER_NUM * 6 - 4)))
 TRUST_DOMAIN_NAME="$OTHER_NUM".snet.example
 
 "$DIR"/bin/spire-server federation create \
@@ -15,6 +15,3 @@ TRUST_DOMAIN_NAME="$OTHER_NUM".snet.example
     -trustDomain $TRUST_DOMAIN_NAME \
     -bundleEndpointURL https://localhost:"$FED_PORT" \
     -endpointSpiffeID spiffe://"$TRUST_DOMAIN_NAME"/spire/server
-
-# ./2_create_federation_dynamic.sh 2 broker.example 8082
-# ./2_create_federation_dynamic.sh 1 stockmarket.example 8084

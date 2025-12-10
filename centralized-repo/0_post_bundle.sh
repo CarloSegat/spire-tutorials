@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/sh
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="$(echo "$SCRIPT_PATH" | sed -n 's#^\(.*spire-tutorials\).*#\1#p')"
@@ -7,21 +7,11 @@ DIR="$BASE_DIR"/artefacts
 NUM="$1"
 TRUST_DOMAIN_NAME="$NUM".snet.example
 
-BUNDLE=$("$DIR"/bin/spire-server bundle show -format spiffe -socketPath "$DIR"/server/"$NUM"/api.sock )
+# BUNDLE=$("$DIR"/bin/spire-server bundle show -format spiffe -socketPath "$DIR"/server/"$NUM"/api.sock )
+BUNDLE=$("$BASE_DIR"/common/print_bundle.sh "$NUM")
 
-JSON=$(
-    printf '{
-  "FederationID": "test",
-  "QualifiedBundle": {
-    "RawBundle": %s,
-    "TrustDomainName": "%s"
-  }
-}' "$(printf '%s\n' "$BUNDLE" | jq -Rs .)" "$TRUST_DOMAIN_NAME")
+echo "BUNDLE $BUNDLE"
 
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d "$JSON" \
-  "http://localhost:8080/bundle"
+FORMATTED_BUNDLE=$(python "$BASE_DIR"/common/format_bundle.py "$TRUST_DOMAIN_NAME" "$BUNDLE") 
 
-# ./0_post_bundle.sh 2 stockmarket.example
-# ./0_post_bundle.sh 1 broker.example
+python ./post_bundle.py "$FORMATTED_BUNDLE"

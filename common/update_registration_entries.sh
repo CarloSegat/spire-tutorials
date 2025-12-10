@@ -8,12 +8,10 @@ DIR="$BASE_DIR"/artefacts
 MY_NUM=$1
 OTHER_NUM=$2
 
-ID_AND_PARENT=$("$DIR"/bin/spire-server entry show -socketPath "$DIR"/server/"$MY_NUM"/api.sock | awk -F': ' '/Entry/ {printf $2} /Parent/ {printf " %s\n", $2;}')
+# ID_AND_PARENT=$("$DIR"/bin/spire-server entry show -socketPath "$DIR"/server/"$MY_NUM"/api.sock | awk -F': ' '/Entry/ {printf $2} /Parent/ {printf " %s\n", $2;}')
 
 
 FEDERATES_WITH_FLAGS=$("$DIR"/bin/spire-server federation list -socketPath "$DIR"/server/"$MY_NUM"/api.sock | awk '/Trust domain/ {print "-federatesWith spiffe://"$4}' )
-
-
 
 "$DIR"/bin/spire-server entry show -socketPath "$DIR"/server/"$MY_NUM"/api.sock | awk -F': ' '/Entry/ {printf $2} /SPIFFE/ {printf " %s", $2}  /Parent/ {printf " %s\n", $2;}' |
 while IFS= read -r line
@@ -34,6 +32,3 @@ do
 	-spiffeID "$SPIFFE_ID" \
     $FEDERATES_WITH_FLAGS 
 done
-
-
-# -federatesWith spiffe://"$OTHER_NUM".snet.example

@@ -18,7 +18,7 @@ create_single_agent() {
     openssl genrsa -out "agent-$num.key" 2048
     openssl req -new -key "agent-$num.key" -out "agent-$num.csr" -subj "/CN=$agent_num" -config agent.csr.cnf -extensions v3_ext
     openssl x509 -req -in "agent-$num.csr" -CA ./agent-cacert.pem -CAkey server.key -CAcreateserial -out "agent-$num.crt.pem" -days 365 -sha256 -extfile agent.csr.cnf -extensions v3_ext
-    echo "JOHJOHJHJOOHOHO"
+
     cp ./agent-$num.crt.pem "$DIR"/agent/"$agent_num"/agent.crt.pem
     cp ./agent-$num.key "$DIR"/agent/"$agent_num"/agent.key.pem
     # "$DIR"/bin/spire-agent run -expandEnv -config "$DIR"/agent/agent.conf &
@@ -38,7 +38,7 @@ export DIR
 export NUM="$1"
 export MAX_NUM="$2"
 
-export PORT=$(( 8080 + (NUM * 6 - 5)))
+export PORT=$(( 8082 + (NUM * 6 - 5)))
 export FED_PORT=$(( PORT + 1 ))
 export DOMAIN="$NUM".snet.example
 
@@ -85,6 +85,4 @@ mkdir -p "$DIR"/workloads/"$NUM"/4
 
 ./register_agents_entries.sh "$NUM" "$DIR"
 
-find . -name '[server|agent].*[pem|csr|key|srl]' -delete
-
-find . -maxdepth 1 -regextype posix-extended -regex '.*/(server|agent).*(pem|key|csr|srl)' -type f -delete
+find "$BASE_DIR"/set_up  -regex '.*[pem|csr|key|srl]' -delete

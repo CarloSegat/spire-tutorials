@@ -24,13 +24,15 @@ while [ $i -le $n ]; do
             ii=$((ii + 1))
             continue
         fi
-        ./1_set_bundle.sh $i $ii
+        ./1_fetch_bundles.sh $i $ii
         ii=$((ii + 1))
     done
     i=$((i + 1))
 done
 
-sleep 3
+sleep 2
+
+cd ../common
 
 i=1
 while [ $i -le $n ]; do
@@ -40,14 +42,14 @@ while [ $i -le $n ]; do
             ii=$((ii + 1))
             continue
         fi
-        ./2_create_federation_dynamic.sh $i $ii
+        ./create_federation_dynamic.sh $i $ii
         # ./3_update_registration_entries.sh $i $ii
         ii=$((ii + 1))
     done
     i=$((i + 1))
 done
 
-sleep 3
+sleep 2
 
 i=1
 while [ $i -le $n ]; do
@@ -57,18 +59,8 @@ while [ $i -le $n ]; do
             ii=$((ii + 1))
             continue
         fi
-        # ./2_create_federation_dynamic.sh $i $ii
-        ./3_update_registration_entries.sh $i $ii
+        ./update_registration_entries.sh $i $ii
         ii=$((ii + 1))
     done
     i=$((i + 1))
 done
-# cd ../centralized-repo
-# ./0_post_bundle.sh 1
-# ./0_post_bundle.sh 2
-# ./1_set_bundle.sh 1 2
-# ./1_set_bundle.sh 2 1
-# ./2_create_federation_dynamic.sh 1 2
-# ./2_create_federation_dynamic.sh 2 1
-# ./3_update_registration_entries.sh 1 2
-# ./3_update_registration_entries.sh 2 1
