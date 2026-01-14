@@ -29,8 +29,8 @@ data/
 node_modules/
 
 
-*.pem
-*.csr
-*.key
+*pem
+*csr
+*key
 
 cache/
