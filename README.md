@@ -26,3 +26,6 @@ Dynamic federation creation
 
 
 ./bin/spire-server entry update -entryID c21b0f87-6cd3-48e7-848e-af30885f534f -socketPath /home/carlo/spire-tutorials/artefacts/server/1/api.sock -federatesWith spiffe://2.example.snet -selector unix:user:carlo -parentID spiffe://1.example.snet/spire/agent/x509pop/1.example.snet/1-2
+
+
+./artefacts/bin/spire-server localauthority x509 show -socketPath /Users/carlosegat/REPOS/spire-tutorials/artefacts/server/1/api.sock

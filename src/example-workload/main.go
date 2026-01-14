@@ -65,11 +65,12 @@ func main() {
 	}
 
 	wg.Wait()
-	
-	log.Println(">>> 30 seconds before")
-	time.Sleep(12 * time.Second)
-	log.Println(">>> 30 seconds after")
-	
+
+	time.Sleep(5 * time.Second)
+
+	log.Println("All worklopads internal to the cluster have exchanged a message, clustersetup complete")
+	log.Println("Experiment begins: attempting to send 1 message to each workload in each other cluster")
+
 	// external comms
 	
 	for _, theirPort := range generateExternalPorts(myServerNumber, maxServerNumber) {
@@ -77,7 +78,7 @@ func main() {
 		go talk(ctx, theirPort, &wg)
 	}
 	wg.Wait()
-	log.Println("Every message was sent, terminating workload")
+	log.Println("All messages sent, experiemnt is finished")
 	
 	// defer wg.Wait()
 	select {}
@@ -102,8 +103,8 @@ func initLoggerToFile(log *logrus.Logger, logPath string) {
 func makeArray(port int) []int {
 	// Compute the base of the block n belongs to.
 	// Each block is size 4, spaced by 6.
-	blockOffset := (port - 8084) / 6 // which block number?
-	base := 8084 + blockOffset*6  // starting value of the block
+	blockOffset := (port - 8085) / 6 // which block number?
+	base := 8085 + blockOffset*6  // starting value of the block
 
 	result := []int{}
 	for i := 0; i < 4; i++ {
@@ -227,6 +228,10 @@ func (MyBundleWatcher) OnX509BundlesUpdate(boh *x509bundle.Set) {
 
 	log.Println("showing my bundle")
 	log.Println("X509Authorities", len(myBundle.X509Authorities()))
+	
+	if (len(myBundle.X509Authorities() == 2)) {
+		log.Println("New key activated")
+	}
 
 	log.Println(myBundle)
 
@@ -268,7 +273,7 @@ func generateExternalPorts(myServer int, maxServer int) []int {
 		if num+1 == myServer {
 			continue
 		}
-		base := 8084 + num*6 // starting value of the block
+		base := 8085 + num*6 // starting value of the block
 
 		result = append(result, base, base+1, base+2, base+3)
 	}

@@ -6,15 +6,17 @@ n=$1
 
 cd ./centralized-repo
 
+echo "time=$(date +"%T")"
+
 i=1
 while [ $i -le $n ]; do
     echo "Iteration: $i"
     ./0_post_bundle.sh $i
     i=$((i + 1))
-    sleep 0.5
+    sleep 0.1
 done
 
-sleep 1
+sleep 0.1
 
 i=1
 while [ $i -le $n ]; do
@@ -30,7 +32,7 @@ while [ $i -le $n ]; do
     i=$((i + 1))
 done
 
-sleep 2
+sleep 0.1
 
 cd ../common
 
@@ -49,7 +51,7 @@ while [ $i -le $n ]; do
     i=$((i + 1))
 done
 
-sleep 2
+sleep 1
 
 i=1
 while [ $i -le $n ]; do
