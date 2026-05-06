@@ -4,6 +4,9 @@ SERVER_NUM="$1"
 DIR="$2"
 MY_TRUST_DOMAIN_NAME="$SERVER_NUM".snet.example
 
+# those entries are for the Agents to give out to the workloads later
+# parentID is the agent sort of "owning" the entry
+
 
 "$DIR"/bin/spire-server entry create \
     -socketPath "$DIR"/server/"$SERVER_NUM"/api.sock \

@@ -16,7 +16,7 @@ create_single_agent() {
 
     mkdir -p "$DIR"/agent/"$agent_num"
     openssl genrsa -out "agent-$num.key" 2048
-    openssl req -new -key "agent-$num.key" -out "agent-$num.csr" -subj "/CN=$agent_num" -config agent.csr.cnf -extensions v3_ext
+    openssl req -new -key "agent-$num.key" -out "agent-$num.csr" -subj "/CN=$agent_num"
     openssl x509 -req -in "agent-$num.csr" -CA ./agent-cacert.pem -CAkey server.key -CAcreateserial -out "agent-$num.crt.pem" -days 365 -sha256 -extfile agent.csr.cnf -extensions v3_ext
 
     cp ./agent-$num.crt.pem "$DIR"/agent/"$agent_num"/agent.crt.pem
@@ -83,6 +83,9 @@ mkdir -p "$DIR"/workloads/"$NUM"/4
 "$DIR"/bin/example-workload "$W4_PORT" "$DIR"/workloads/"$NUM"/4 "$NUM" "$MAX_NUM" &
 
 
+
 ./register_agents_entries.sh "$NUM" "$DIR"
+
+
 
 find "$BASE_DIR"/set_up  -regex '.*[pem|csr|key|srl]' -delete

@@ -8,4 +8,4 @@ find ../artefacts/workloads/* -delete
 pkill spire-server
 pkill spire-agent
 pkill example-w
-pkill centralized-rep
+pkill centralized-spi

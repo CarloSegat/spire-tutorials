@@ -6,7 +6,8 @@ DIR="$BASE_DIR"/artefacts
 
 NUM="$1"
 OTHER_NUM="$2"
-FED_PORT=$(( 8083 + ($OTHER_NUM * 6 - 4)))
+FED_PORT=$(( 8082 + 1 + ($OTHER_NUM * 6 - 5)))
+
 TRUST_DOMAIN_NAME="$OTHER_NUM".snet.example
 
 "$DIR"/bin/spire-server federation create \

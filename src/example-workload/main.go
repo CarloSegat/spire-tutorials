@@ -3,11 +3,13 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +30,7 @@ var log *logrus.Logger
 var myServerNumber int
 var maxServerNumber int
 var myPort int
+var experiementFinished bool
 
 func main() {
 	if len(os.Args) != 5 {
@@ -61,12 +64,10 @@ func main() {
 	
 	for _, theirPort := range theirPorts {
 		wg.Add(1)
-		go talk(ctx, theirPort, &wg)
+		go talk(ctx, theirPort, &wg, fmt.Sprintf("ping from %d", myPort))
 	}
 
 	wg.Wait()
-
-	time.Sleep(5 * time.Second)
 
 	log.Println("All worklopads internal to the cluster have exchanged a message, clustersetup complete")
 	log.Println("Experiment begins: attempting to send 1 message to each workload in each other cluster")
@@ -75,16 +76,16 @@ func main() {
 	
 	for _, theirPort := range generateExternalPorts(myServerNumber, maxServerNumber) {
 		wg.Add(1)
-		go talk(ctx, theirPort, &wg)
+		go talk(ctx, theirPort, &wg, fmt.Sprintf("ping from %d", myPort))
 	}
 	wg.Wait()
 	log.Println("All messages sent, experiemnt is finished")
-	
+	experiementFinished = true
+
+	log.Println("experiementFinished ", experiementFinished)
+
 	// defer wg.Wait()
 	select {}
-
-
-
 }
 
 func initLoggerToFile(log *logrus.Logger, logPath string) {
@@ -98,6 +99,12 @@ func initLoggerToFile(log *logrus.Logger, logPath string) {
 	wrt := io.MultiWriter(os.Stdout, f)
 
 	log.SetOutput(wrt)
+	
+	// Configure formatter to include milliseconds in timestamp
+	log.SetFormatter(&logrus.TextFormatter{
+		TimestampFormat: "2006-01-02 15:04:05.000",
+		FullTimestamp:   true,
+	})
 }
 
 func makeArray(port int) []int {
@@ -116,7 +123,7 @@ func makeArray(port int) []int {
 	return result
 }
 
-func talk(ctx context.Context, theirPort int, wg *sync.WaitGroup) {
+func talk(ctx context.Context, theirPort int, wg *sync.WaitGroup, message string) {
 	defer wg.Done()
 
 	theirAddress := fmt.Sprintf("127.0.0.1:%d", theirPort)
@@ -131,9 +138,12 @@ func talk(ctx context.Context, theirPort int, wg *sync.WaitGroup) {
 			tlsconfig.AuthorizeAny(),
 		)
 		if err == nil {
+			log.Printf("Established TLS connection to %d", theirPort)
 			break
-			// log.Printf("unable to create TLS connection: %w", err)
 		}
+
+		log.Printf("Error in talk is %v", err)
+		
 		select {
 			case <-ctx.Done():
 				log.Warnf("Context canceled for %s: %v", theirAddress, ctx.Err())
@@ -148,7 +158,7 @@ func talk(ctx context.Context, theirPort int, wg *sync.WaitGroup) {
 
 	// Send a message to the server using the TLS connection
 
-	fmt.Fprintf(conn, "ping from %d\n", myPort)
+	fmt.Fprintf(conn, "%s\n", message)
 
 	log.Printf("Sent ping to %s", theirAddress)
 
@@ -198,7 +208,7 @@ func startWatchers(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := client.WatchX509Bundles(ctx, &MyBundleWatcher{})
+		err := client.WatchX509Bundles(ctx, &MyBundleWatcher{ctx: ctx})
 		if err != nil && status.Code(err) != codes.Canceled {
 			log.Fatalf("Error watching X.509 context: %v", err)
 		}
@@ -209,9 +219,41 @@ func startWatchers(ctx context.Context) {
 
 // x509Watcher is a sample implementation of the workloadapi.X509ContextWatcher interface
 // type x509Watcher struct{}
-type MyBundleWatcher struct{}
+type MyBundleWatcher struct {
+	ctx                      context.Context
+	previousBundleSerials   map[string][]string // trust domain -> []certificate serial numbers
+	previousBundleSerialsMux sync.Mutex
+}
 
-func (MyBundleWatcher) OnX509BundlesUpdate(boh *x509bundle.Set) {
+// getBundleSerials extracts certificate serial numbers from a bundle
+func getBundleSerials(bundle *x509bundle.Bundle) []string {
+	authorities := bundle.X509Authorities()
+	serials := make([]string, 0, len(authorities))
+	for _, cert := range authorities {
+		// cert is of type *x509.Certificate from crypto/x509 package
+		var _ *x509.Certificate = cert // explicit type to satisfy linter
+		serials = append(serials, cert.SerialNumber.String())
+	}
+	return serials
+}
+
+// compareSerials compares two serial slices and returns true if they differ
+func compareSerials(s1, s2 []string) bool {
+	if len(s1) != len(s2) {
+		return true
+	}
+	// Sort both slices to compare regardless of order
+	sort.Strings(s1)
+	sort.Strings(s2)
+	for i := range s1 {
+		if s1[i] != s2[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *MyBundleWatcher) OnX509BundlesUpdate(boh *x509bundle.Set) {
 	log.Println("509 update called", boh)
 
 	myTrustDomain, err := spiffeid.TrustDomainFromString(deduceServerSpiffeID(myServerNumber))
@@ -228,17 +270,92 @@ func (MyBundleWatcher) OnX509BundlesUpdate(boh *x509bundle.Set) {
 
 	log.Println("showing my bundle")
 	log.Println("X509Authorities", len(myBundle.X509Authorities()))
-	
-	if (len(myBundle.X509Authorities() == 2)) {
-		log.Println("New key activated")
+
+	// Check if any federation bundle (not our own) has been updated
+	w.previousBundleSerialsMux.Lock()
+	if w.previousBundleSerials == nil {
+		w.previousBundleSerials = make(map[string][]string)
+	}
+
+	var updatedServerNum int
+	federationUpdated := false
+	for serverNum := 1; serverNum <= maxServerNumber; serverNum++ {
+		// Skip our own trust domain
+		if serverNum == myServerNumber {
+			continue
+		}
+
+		trustDomainStr := fmt.Sprintf("%d.snet.example", serverNum)
+		trustDomain, err := spiffeid.TrustDomainFromString(trustDomainStr)
+		if err != nil {
+			continue
+		}
+
+		bundle, present := boh.Get(trustDomain)
+		if !present {
+			continue
+		}
+
+		// Get current certificate serial numbers
+		currentSerials := getBundleSerials(bundle)
+		previousSerials, hadPrevious := w.previousBundleSerials[trustDomainStr]
+
+		// Check if this federation bundle has been updated
+		if hadPrevious {
+			if compareSerials(previousSerials, currentSerials) {
+				log.Printf("Detected federation bundle update: %s certificate serials changed from %v to %v", 
+					trustDomainStr, previousSerials, currentSerials)
+				federationUpdated = true
+				updatedServerNum = serverNum
+			}
+		} else {
+			log.Printf("First time seeing federation bundle: %s with certificate serials %v", 
+				trustDomainStr, currentSerials)
+		}
+
+		w.previousBundleSerials[trustDomainStr] = currentSerials
+	}
+	w.previousBundleSerialsMux.Unlock()
+
+	if federationUpdated && experiementFinished {
+		log.Printf("Federation bundle certificate serials updated for server %d - initiating communication after key rotation", updatedServerNum)
+		go communicateAgainAfterKeyRotation(w.ctx, updatedServerNum)
 	}
 
 	log.Println(myBundle)
 
 }
 
-func (MyBundleWatcher) OnX509BundlesWatchError(err error) {
+func (w *MyBundleWatcher) OnX509BundlesWatchError(err error) {
 	log.Println("got somthing erroneous", err)
+}
+
+// getPortsForServer returns the 4 ports for a specific server number
+func getPortsForServer(serverNum int) []int {
+	base := 8085 + (serverNum-1)*6
+	result := make([]int, 4)
+	for i := 0; i < 4; i++ {
+		result[i] = base + i
+	}
+	return result
+}
+
+// communicateAgainAfterKeyRotation sends a special message to peers after a new key is activated.
+// It only sends messages to the 4 workloads belonging to the server whose bundle was updated.
+func communicateAgainAfterKeyRotation(ctx context.Context, updatedServerNum int) {
+	log.Printf("Starting special communication: communicating again after key rotation (targeting server %d)", updatedServerNum)
+
+	theirPorts := getPortsForServer(updatedServerNum)
+	log.Printf("Ports for post-rotation communication to server %d: %v", updatedServerNum, theirPorts)
+
+	var wg sync.WaitGroup
+	for _, theirPort := range theirPorts {
+		wg.Add(1)
+		go talk(ctx, theirPort, &wg, fmt.Sprintf("communicating again after key rotation from %d", myPort))
+	}
+
+	wg.Wait()
+	log.Printf("Finished special communication: communicating again after key rotation (server %d)", updatedServerNum)
 }
 
 func handleConnection(conn net.Conn) {
@@ -254,7 +371,13 @@ func handleConnection(conn net.Conn) {
 		log.Printf("Error reading incoming data: %v", err)
 		return
 	}
-	log.Printf("Received message: %q", req)
+
+	trimmedReq := strings.TrimSpace(req)
+	if strings.HasPrefix(trimmedReq, "communicating again after key rotation") {
+		log.Printf("Received special post-rotation message: %q", trimmedReq)
+	} else {
+		log.Printf("Received message: %q", trimmedReq)
+	}
 
 	// Send a response back to the other workload
 	if _, err = conn.Write([]byte("Pong\n")); err != nil {

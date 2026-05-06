@@ -1,6 +1,6 @@
 #!/bin/sh
 
-cd ./set_up
+cd ../set_up
 
 ./kill_stuff.sh
 
