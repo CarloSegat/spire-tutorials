@@ -1,17 +1,5 @@
 # Prototype Plan: Federation Management Comparison
 
-## Goal
-
-Build a prototype that compares three workload identity federation approaches:
-
-- **SPIFFE/SPIRE** (already implemented)
-- **OAuth 2.0** with token exchange (RFC 8693)
-- **OIDC** workload identity federation (OIDC infrastructure reused for M2M)
-
-The scenario is: Workload 1 (W1) in Domain 1 authenticates and calls Workload 2 (W2) in Domain 2. The prototype must support setting up the federation between domains, adding members, and revoking members.
-
----
-
 ## How OAuth 2.0 Works in This Context
 
 OAuth 2.0 is an authorization framework. In the M2M/workload context the relevant grant is **client credentials** (RFC 6749 §4.4): a workload authenticates to its own issuer using a client ID and secret and receives a short-lived access token (JWT). No human is involved.

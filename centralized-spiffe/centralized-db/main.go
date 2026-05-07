@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 )
 
 const (
@@ -32,13 +34,17 @@ type DeleteBundleRequest struct {
 }
 
 var storage map[string][]QualifiedBundle
+var sseClients map[chan string]struct{}
+var sseClientsMux sync.Mutex
 
 func main() {
 	storage = make(map[string][]QualifiedBundle)
+	sseClients = make(map[chan string]struct{})
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /bundle", postBundle)
 	mux.HandleFunc("PUT /bundle", updateBundle)
 	mux.HandleFunc("DELETE /bundle", deleteBundle)
+	mux.HandleFunc("GET /events", streamEvents)
 	mux.HandleFunc(getBundlesEndpoint, getBundles)
 	http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
 }
@@ -129,6 +135,11 @@ func updateBundle(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Created new bundle with TrustDomainName %s in FederationID %s\n", bundleReq.QualifiedBundle.TrustDomainName, bundleReq.FederationID)
 	}
 
+	broadcast("bundle_updated", map[string]interface{}{
+		"federation_id": bundleReq.FederationID,
+		"trust_domain": bundleReq.QualifiedBundle.TrustDomainName,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
@@ -191,7 +202,56 @@ func deleteBundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	broadcast("bundle_deleted", map[string]interface{}{
+		"federation_id": deleteReq.FederationID,
+		"trust_domain": deleteReq.TrustDomainName,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+}
+
+func streamEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	events := make(chan string)
+
+	sseClientsMux.Lock()
+	sseClients[events] = struct{}{}
+	sseClientsMux.Unlock()
+
+	defer func() {
+		sseClientsMux.Lock()
+		delete(sseClients, events)
+		sseClientsMux.Unlock()
+		close(events)
+	}()
+
+	for {
+		select {
+		case event := <-events:
+			fmt.Fprintf(w, "data: %s\n\n", event)
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		}
+	}
+}
+
+func broadcast(eventType string, data map[string]interface{}) {
+	payload, _ := json.Marshal(data)
+	event := fmt.Sprintf(`{"type": "%s", "timestamp": %d, "data": %s}`, eventType, time.Now().Unix(), string(payload))
+
+	sseClientsMux.Lock()
+	defer sseClientsMux.Unlock()
+
+	for ch := range sseClients {
+		select {
+		case ch <- event:
+		default:
+		}
+	}
 }

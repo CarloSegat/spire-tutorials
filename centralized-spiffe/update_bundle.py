@@ -1,13 +1,25 @@
 import json
 import sys
-
 import requests
 
-if len(sys.argv) < 2:
-    raise "need formatted bundle"
+def update_bundle(formatted_bundle_json_str):
+    """
+    PUT a formatted bundle to the centralized repository (update).
 
-# Use the formatted bundle directly (includes FederationID and QualifiedBundle)
-bundle_data = json.loads(sys.argv[1])
+    Args:
+        formatted_bundle_json_str: JSON string with FederationID and QualifiedBundle
 
-r = requests.put("http://localhost:8080/bundle", json=bundle_data)
-print(r.status_code, r.text)
+    Returns:
+        tuple (status_code, response_text)
+    """
+    bundle_data = json.loads(formatted_bundle_json_str) if isinstance(formatted_bundle_json_str, str) else formatted_bundle_json_str
+    r = requests.put("http://localhost:8080/bundle", json=bundle_data)
+    return r.status_code, r.text
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        raise RuntimeError("need formatted bundle")
+
+    formatted_bundle = sys.argv[1]
+    status, text = update_bundle(formatted_bundle)
+    print(status, text)
