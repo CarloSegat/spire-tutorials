@@ -49,7 +49,7 @@ sleep 1
 TRUST_DOMAIN_NAME="$NUM".snet.example
 BUNDLE=$("$BASE_DIR"/common/print_bundle.sh "$NUM")
 FORMATTED_BUNDLE=$(python3 "$BASE_DIR"/common/format_bundle.py "$TRUST_DOMAIN_NAME" "$BUNDLE")
-python3 "$BASE_DIR"/centralized-spiffe/update_bundle.py "$FORMATTED_BUNDLE" >&3
+python3 "$BASE_DIR"/centralized-spiffe/upsert_bundle.py "$FORMATTED_BUNDLE" >&3
 
 ROTATION_END_EPOCH=$(date +%s.%N)
 echo "$ROTATION_END_EPOCH" > "$DIR/server/$NUM/rotation_end.epoch"

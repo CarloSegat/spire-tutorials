@@ -42,7 +42,7 @@ func main() {
 	sseClients = make(map[chan string]struct{})
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /bundle", postBundle)
-	mux.HandleFunc("PUT /bundle", updateBundle)
+	mux.HandleFunc("PUT /bundle", upsertBundle)
 	mux.HandleFunc("DELETE /bundle", deleteBundle)
 	mux.HandleFunc("GET /events", streamEvents)
 	mux.HandleFunc(getBundlesEndpoint, getBundles)
@@ -84,7 +84,7 @@ func postBundle(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "created"})
 }
 
-func updateBundle(w http.ResponseWriter, r *http.Request) {
+func upsertBundle(w http.ResponseWriter, r *http.Request) {
 	var bundleReq BundleRequest
 	if err := json.NewDecoder(r.Body).Decode(&bundleReq); err != nil {
 		fmt.Println(err)

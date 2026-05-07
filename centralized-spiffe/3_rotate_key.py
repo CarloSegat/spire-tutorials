@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "common"))
 import spire_utils
 from print_bundle import print_bundle
 from format_bundle import format_bundle
-from update_bundle import update_bundle
+from upsert_bundle import upsert_bundle
 
 sys.path.insert(0, str(Path(__file__).parent))
 from measure_rotation_end import measure_rotation_end
@@ -76,12 +76,12 @@ def taint_x509_authority(num, authority_id):
     )
 
 
-def update_bundle_in_centralized_repo(num):
+def upsert_bundle_in_centralized_repo(num):
     td = spire_utils.trust_domain(num)
     bundle = print_bundle(num)
     formatted = format_bundle(td, bundle)
-    status, response = update_bundle(formatted)
-    print(f"update_bundle response: {status} {response}", file=sys.stderr)
+    status, response = upsert_bundle(formatted)
+    print(f"upsert_bundle response: {status} {response}", file=sys.stderr)
 
 
 def fetch_bundles_from_centralized_repo():
@@ -174,7 +174,7 @@ def rotate_key_for_server(num, max_server):
     taint_x509_authority(num, active_auth_id)
     time.sleep(1)
 
-    update_bundle_in_centralized_repo(num)
+    upsert_bundle_in_centralized_repo(num)
     record_rotation_end(num)
     record_event_fired(num)
 

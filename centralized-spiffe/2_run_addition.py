@@ -8,12 +8,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "common"))
 import spire_utils
-from post_bundle import post_bundle_for_server
+from print_bundle import print_bundle
+from format_bundle import format_bundle
 from create_federation_dynamic import create_federation_dynamic
 from update_registration_entries import update_registration_entries
 from fetch_bundles import fetch_bundles
 
 sys.path.insert(0, str(Path(__file__).parent))
+from upsert_bundle import upsert_bundle
 from measure_addition_end import measure_addition_end, record_addition_start
 
 def detect_next_server_number():
@@ -48,9 +50,13 @@ def setup_new_cluster(n):
     time.sleep(3)
 
 
-def post_bundle_for_new_server(n):
-    print(f"Posting bundle for server {n}...", file=sys.stderr)
-    post_bundle_for_server(n)
+def publish_bundle_for_new_server(n):
+    print(f"Publishing bundle for server {n} via SSE broadcast...", file=sys.stderr)
+    td = spire_utils.trust_domain(n)
+    bundle = print_bundle(n)
+    formatted = format_bundle(td, bundle)
+    status, response = upsert_bundle(formatted)
+    print(f"upsert_bundle response: {status} {response}", file=sys.stderr)
 
 
 def fetch_bundles_for_new_server(n):
@@ -121,7 +127,7 @@ def run_addition():
     start_listener_for_new_server(n)
     record_addition_start(n)
 
-    post_bundle_for_new_server(n)
+    publish_bundle_for_new_server(n)
     fetch_bundles_for_new_server(n)
     time.sleep(0.1)
 
