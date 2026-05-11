@@ -1,54 +1,48 @@
 #!/usr/bin/env python3
-"""Fetch bundles from centralized repository and set them locally."""
+"""Fetch bundles from the centralized repo and set them on a local SPIRE server."""
 
-import json
 import sys
 from pathlib import Path
-import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "common"))
 import spire_utils
 from set_bundle import set_bundle
+
+sys.path.insert(0, str(Path(__file__).parent))
+import repo_client
+
 
 def log_own_bundle_size(server_num):
     own_bundle = spire_utils.spire_server("bundle", "show", "-format", "spiffe", server_num=server_num)
     print(f"Own bundle size: {len(own_bundle)} chars", file=sys.stderr)
 
 
-def fetch_qualified_bundles_from_repo():
-    print(f"Fetching bundles from http://localhost:8080/bundles/test", file=sys.stderr)
-    response = requests.get("http://localhost:8080/bundles/test")
-    response.raise_for_status()
-
-    qualified_bundles = response.json().get("QualifiedBundles", [])
-    print(f"Received {len(qualified_bundles)} qualified bundles", file=sys.stderr)
-    return qualified_bundles
-
-
 def write_bundle_files_locally(qualified_bundles, cwd):
     for bundle in qualified_bundles:
         td = bundle["TrustDomainName"]
-        raw_bundle = bundle["RawBundle"]
-
-        bundle_file = cwd / f"{td}.json"
-        bundle_file.write_text(raw_bundle)
+        (cwd / f"{td}.json").write_text(bundle["RawBundle"])
         print(f"Wrote bundle for {td}", file=sys.stderr)
 
 
 def fetch_bundles(server_num, cwd=None):
-    """
-    Fetch all bundles from centralized repository and set them on this server.
+    """Fetch every bundle in the federation and import them into this server.
+
+    Pulls /bundles/{federation} from the repo, writes each one to
+    `<cwd>/<td>.json`, then invokes `set_bundle` to feed them to the
+    local spire-server.
 
     Args:
-        server_num: server number
-        cwd: working directory to write bundle files (default: current)
+        server_num: server number whose spire-server will receive the bundles.
+        cwd: directory to write the bundle files into (defaults to CWD).
     """
     cwd = Path(cwd) if cwd is not None else Path.cwd()
 
     log_own_bundle_size(server_num)
-    qualified_bundles = fetch_qualified_bundles_from_repo()
+    qualified_bundles = repo_client.get_bundles()
+    print(f"Received {len(qualified_bundles)} qualified bundles", file=sys.stderr)
     write_bundle_files_locally(qualified_bundles, cwd)
     set_bundle(server_num, cwd)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

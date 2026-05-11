@@ -57,32 +57,45 @@ func main() {
 	go listenn(ctx, myPort)
 	
 	wg := sync.WaitGroup{}
-	
-	// internal comms
-	theirPorts := makeArray(myPort)
-	log.Println("their ports", theirPorts)
-	
-	for _, theirPort := range theirPorts {
-		wg.Add(1)
-		go talk(ctx, theirPort, &wg, fmt.Sprintf("ping from %d", myPort))
+
+	skipInitialMesh := os.Getenv("SKIP_INITIAL_MESH") != ""
+
+	if !skipInitialMesh {
+		// internal comms
+		theirPorts := makeArray(myPort)
+		log.Println("their ports", theirPorts)
+
+		for _, theirPort := range theirPorts {
+			wg.Add(1)
+			go talk(ctx, theirPort, &wg, fmt.Sprintf("ping from %d", myPort))
+		}
+
+		wg.Wait()
+
+		log.Println("All worklopads internal to the cluster have exchanged a message, clustersetup complete")
+		log.Println("Experiment begins: attempting to send 1 message to each workload in each other cluster")
+
+		// external comms
+
+		for _, theirPort := range generateExternalPorts(myServerNumber, maxServerNumber) {
+			wg.Add(1)
+			go talk(ctx, theirPort, &wg, fmt.Sprintf("ping from %d", myPort))
+		}
+		wg.Wait()
+		log.Println("All messages sent, experiemnt is finished")
+	} else {
+		log.Println("SKIP_INITIAL_MESH set; skipping initial mesh setup")
 	}
-
-	wg.Wait()
-
-	log.Println("All worklopads internal to the cluster have exchanged a message, clustersetup complete")
-	log.Println("Experiment begins: attempting to send 1 message to each workload in each other cluster")
-
-	// external comms
-	
-	for _, theirPort := range generateExternalPorts(myServerNumber, maxServerNumber) {
-		wg.Add(1)
-		go talk(ctx, theirPort, &wg, fmt.Sprintf("ping from %d", myPort))
-	}
-	wg.Wait()
-	log.Println("All messages sent, experiemnt is finished")
 	experiementFinished = true
 
 	log.Println("experiementFinished ", experiementFinished)
+
+	// Start periodic sends if configured
+	if iv := os.Getenv("PERIODIC_SEND_INTERVAL_SECONDS"); iv != "" {
+		if n, err := strconv.Atoi(iv); err == nil && n > 0 {
+			go runPeriodicSends(ctx, generateExternalPorts(myServerNumber, maxServerNumber), n)
+		}
+	}
 
 	// defer wg.Wait()
 	select {}
@@ -356,6 +369,44 @@ func communicateAgainAfterKeyRotation(ctx context.Context, updatedServerNum int)
 
 	wg.Wait()
 	log.Printf("Finished special communication: communicating again after key rotation (server %d)", updatedServerNum)
+}
+
+func runPeriodicSends(ctx context.Context, targets []int, intervalSeconds int) {
+	ticker := time.NewTicker(time.Duration(intervalSeconds) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			allFailed := true
+			for _, target := range targets {
+				addr := fmt.Sprintf("127.0.0.1:%d", target)
+				// 2s per-dial timeout so a hung TLS handshake doesn't block the round
+				dialCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				conn, err := spiffetls.Dial(dialCtx,
+					"tcp",
+					addr,
+					tlsconfig.AuthorizeAny(),
+				)
+				cancel()
+
+				if err != nil {
+					log.Infof("periodic_send_failed to %d", target)
+				} else {
+					conn.Close()
+					allFailed = false
+					log.Infof("periodic_send_success to %d", target)
+				}
+			}
+
+			if allFailed {
+				log.Info("zero_communication_achieved")
+				return
+			}
+		}
+	}
 }
 
 func handleConnection(conn net.Conn) {

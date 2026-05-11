@@ -26,37 +26,33 @@ mTLS handshake convergence for every workload pair.
 """
 
 import sys
-import time
-from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "common"))
 import spire_utils
 
+sys.path.insert(0, str(Path(__file__).parent))
+import epoch_io
+
 
 def record_creation_start():
     """Record the moment the first bundle is about to be posted."""
-    f = spire_utils.artefacts_dir() / "creation_start.epoch"
-    f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(str(time.time()))
+    epoch_io.write_epoch(spire_utils.artefacts_dir() / "creation_start.epoch")
 
 
 def measure_creation_end(n):
-    """
-    Compute duration from creation_start.epoch to last workload's
-    "All messages sent" log line.
+    """Compute duration from creation_start.epoch to last "All messages sent" line.
 
     Args:
-        n: number of servers
+        n: number of servers.
 
     Returns:
-        (start_human, end_ts, duration_s) tuple
+        (start_human, end_ts, duration_s) tuple.
 
     Raises:
-        RuntimeError if markers/file not found or count mismatch
+        RuntimeError if markers/file not found or count mismatch (used by pollers).
     """
     workloads_dir = spire_utils.artefacts_dir() / "workloads"
-
     if not workloads_dir.exists():
         raise RuntimeError(f"Workloads directory not found: {workloads_dir}")
 
@@ -64,21 +60,18 @@ def measure_creation_end(n):
     if not creation_start_file.exists():
         raise RuntimeError(f"creation_start.epoch not found: {creation_start_file}")
 
-    # Collect all log files for n servers
     log_files = []
     for i in range(1, n + 1):
         server_dir = workloads_dir / str(i)
         if not server_dir.exists():
             raise RuntimeError(f"Server directory not found: {server_dir}")
-
-        for log_file in server_dir.glob("*/workload.log"):
-            log_files.append(log_file)
+        log_files.extend(server_dir.glob("*/workload.log"))
 
     end_marker = "All messages sent, experiemnt is finished"
     never_match = "\x00__never_match__\x00"
 
     _, highest_end, match_count = spire_utils.highest_and_lowest_timestamps(
-        log_files, never_match, end_marker
+        log_files, never_match, end_marker,
     )
 
     expected = n * 4
@@ -86,15 +79,13 @@ def measure_creation_end(n):
         raise RuntimeError(
             f"end-marker count mismatch: got {match_count}, expected {expected} ({n} servers * 4 workloads)"
         )
-
     if highest_end is None:
         raise RuntimeError("Missing end timestamp")
 
-    start_epoch = float(creation_start_file.read_text().strip())
+    start_epoch = epoch_io.read_epoch(creation_start_file)
     end_epoch = spire_utils.epoch_from_log_ts(highest_end)
     duration = end_epoch - start_epoch
-
-    start_human = datetime.fromtimestamp(start_epoch).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    start_human = epoch_io.human(start_epoch)
 
     print(f"start    = {start_human}")
     print(f"end      = {highest_end}")
@@ -102,15 +93,13 @@ def measure_creation_end(n):
 
     return start_human, highest_end, duration
 
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: measure_creation_end.py <n>", file=sys.stderr)
         sys.exit(1)
-
-    n = int(sys.argv[1])
-
     try:
-        measure_creation_end(n)
+        measure_creation_end(int(sys.argv[1]))
     except RuntimeError as e:
-        print(f"❌ FAIL: {e}", file=sys.stderr)
+        print(f"FAIL: {e}", file=sys.stderr)
         sys.exit(1)

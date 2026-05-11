@@ -1,29 +1,24 @@
 #!/usr/bin/env python3
+"""Per-server SSE listener that reacts to bundle update/delete events."""
 
 import argparse
-import json
 import logging
 import sys
-import tempfile
 import time
 from pathlib import Path
 
-import requests
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from common.spire_utils import spire_server, trust_domain, server_dir
-from common.format_bundle import format_bundle
+
+sys.path.insert(0, str(Path(__file__).parent))
+import repo_client
+from orchestration import apply_raw_bundle
 
 
 def setup_logging(server_num):
     log_file = server_dir(server_num) / "listener.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        filename=log_file,
-        level=logging.INFO,
-        format='%(message)s'
-    )
+    logging.basicConfig(filename=log_file, level=logging.INFO, format='%(message)s')
 
 
 def log_event(msg):
@@ -32,87 +27,50 @@ def log_event(msg):
     print(f"[listener] {msg}")
 
 
-def fetch_and_apply_bundle(trust_domain_name, server_num, max_server):
+def fetch_and_apply_bundle(td, server_num):
+    """Pull the latest bundle for `td` from the repo and import it locally."""
     try:
-        resp = requests.get("http://localhost:8080/bundles/test", timeout=5)
-        resp.raise_for_status()
-        bundles_resp = resp.json()
-
-        # Find the bundle for the rotated trust domain
-        bundle_data = None
-        for qb in bundles_resp.get("QualifiedBundles", []):
-            if qb["TrustDomainName"] == trust_domain_name:
-                bundle_data = qb
-                break
-
-        if not bundle_data:
-            log_event(f"ERROR: bundle for {trust_domain_name} not found in repo")
+        bundle = next(
+            (qb for qb in repo_client.get_bundles() if qb["TrustDomainName"] == td),
+            None,
+        )
+        if bundle is None:
+            log_event(f"ERROR: bundle for {td} not found in repo")
             return False
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
-            tf.write(bundle_data["RawBundle"])
-            tmp_file = tf.name
-
-        try:
-            spire_server("bundle", "set", "-id", trust_domain_name, "-path", tmp_file, "-format", "spiffe", server_num=server_num)
-            ts = time.time()
-            log_event(f"bundle_applied {trust_domain_name} {ts}")
-            return True
-        except Exception as e:
-            log_event(f"ERROR: failed to apply bundle: {e}")
-            return False
-        finally:
-            Path(tmp_file).unlink(missing_ok=True)
+        apply_raw_bundle(td, bundle["RawBundle"], server_num)
+        log_event(f"bundle_applied {td} {time.time()}")
+        return True
     except Exception as e:
-        log_event(f"ERROR: failed to fetch bundle: {e}")
+        log_event(f"ERROR: failed to apply bundle for {td}: {e}")
         return False
 
 
-def listen_for_events(server_num, max_server):
-    own_td = trust_domain(server_num)
+def handle_event(event, own_td, server_num):
+    event_type = event.get("type")
+    event_td = event.get("data", {}).get("trust_domain")
 
-    try:
-        resp = requests.get("http://localhost:8080/events", stream=True, timeout=None)
-        resp.raise_for_status()
-        log_event(f"connected to SSE stream")
+    if event_type == "bundle_updated":
+        log_event(f"bundle_received {event_td} {time.time()}")
+        if event_td != own_td:
+            fetch_and_apply_bundle(event_td, server_num)
 
-        for line in resp.iter_lines():
-            if not line:
-                continue
-
-            line = line.decode('utf-8') if isinstance(line, bytes) else line
-
-            if not line.startswith('data: '):
-                continue
-
+    elif event_type == "bundle_deleted":
+        log_event(f"bundle_received_delete {event_td} {time.time()}")
+        if event_td != own_td:
             try:
-                event_data = json.loads(line[6:])  # Skip 'data: ' prefix
-                event_type = event_data.get("type")
-                event_trust_domain = event_data.get("data", {}).get("trust_domain")
+                spire_server("bundle", "delete", "-id", event_td, "-mode", "dissociate", server_num=server_num)
+                log_event(f"bundle_deleted {event_td} {time.time()}")
+            except Exception as e:
+                log_event(f"ERROR: failed to delete bundle for {event_td}: {e}")
 
-                if event_type == "bundle_updated":
-                    ts = time.time()
-                    log_event(f"bundle_received {event_trust_domain} {ts}")
 
-                    # Skip own bundle
-                    if event_trust_domain != own_td:
-                        fetch_and_apply_bundle(event_trust_domain, server_num, max_server)
-
-                elif event_type == "bundle_deleted":
-                    ts = time.time()
-                    log_event(f"bundle_received_delete {event_trust_domain} {ts}")
-
-                    if event_trust_domain != own_td:
-                        try:
-                            spire_server("bundle", "delete", "-id", event_trust_domain, server_num=server_num)
-                            log_event(f"bundle_deleted {event_trust_domain} {time.time()}")
-                        except Exception as e:
-                            log_event(f"ERROR: failed to delete bundle: {e}")
-
-            except json.JSONDecodeError as e:
-                log_event(f"ERROR: failed to parse event: {e}")
-                continue
-
+def listen_for_events(server_num):
+    own_td = trust_domain(server_num)
+    try:
+        log_event("connected to SSE stream")
+        for event in repo_client.stream_events():
+            handle_event(event, own_td, server_num)
     except KeyboardInterrupt:
         log_event("listener shutting down")
     except Exception as e:
@@ -128,7 +86,7 @@ def main():
 
     setup_logging(args.server_num)
     log_event(f"listener started for server {args.server_num}")
-    listen_for_events(args.server_num, args.max_server)
+    listen_for_events(args.server_num)
 
 
 if __name__ == "__main__":
