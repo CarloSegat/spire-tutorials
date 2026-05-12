@@ -38,7 +38,7 @@ export DIR
 export NUM="$1"
 export MAX_NUM="$2"
 
-export PORT=$(( 8082 + (NUM * 6 - 5)))
+export PORT=$(( 9100 + (NUM * 6 - 5)))
 export FED_PORT=$(( PORT + 1 ))
 export DOMAIN="$NUM".snet.example
 

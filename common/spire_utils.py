@@ -33,8 +33,8 @@ def workload_dir(n, w=None):
     return artefacts_dir() / "workloads" / str(n) / str(w)
 
 def fed_port(n):
-    """Federation port for server n: 8082 + 1 + (n * 6 - 5)."""
-    return 8082 + 1 + (n * 6 - 5)
+    """Federation port for server n: 9100 + 1 + (n * 6 - 5)."""
+    return 9100 + 1 + (n * 6 - 5)
 
 def trust_domain(n):
     return f"{n}.snet.example"
