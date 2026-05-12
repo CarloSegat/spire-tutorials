@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate SPIFFE measurement results into CSV format.
+"""Aggregate SPIFFE/ledger measurement results into CSV format.
 
 Collects all 6 metrics from the 4 measurement scripts and outputs as a CSV row.
 Appends to results.csv for accumulation across multiple federation sizes.
@@ -20,7 +20,7 @@ from measure_removal_end import measure_removal_end
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python3 measure_centralized.py <N>", file=sys.stderr)
+        print("Usage: python3 measure_ledger.py <N>", file=sys.stderr)
         sys.exit(1)
 
     try:
