@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Per-domain listener: subscribes to OAuth metadata events (centralized/SSE).
+"""Per-domain listener: polls OAuthMetadataStore contract events (ledger variant).
 
 For each peer K added to federation F, calls the LOCAL Keycloak admin
 API to create IDP alias `F-K` (pointing at K's JWKS) plus a public
@@ -11,13 +11,13 @@ import argparse
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+VARIANT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(VARIANT_DIR.parent))
 
 import keycloak as kc
 import repo_client
 from listener_handlers import setup_logging, log, write_peers_file, handle_add, handle_remove
 
-VARIANT_DIR = Path(__file__).resolve().parent
 PIDS_DIR = VARIANT_DIR / "pids"
 
 
@@ -34,7 +34,9 @@ def main():
     tok = kc.admin_token(domain_index)
     kc.bump_master_token_lifespan(domain_index, tok, 86400)
 
-    stream = repo_client.open_event_stream()
+    # Create event filters FIRST so events emitted during backfill are captured
+    filters = repo_client.create_event_filters()
+
     seen = set()
     peers = {}
     for m in repo_client.list_metadata():
@@ -54,7 +56,7 @@ def main():
     write_peers_file(domain_index, peers, PIDS_DIR)
 
     try:
-        for ev in repo_client.iter_events(stream):
+        for ev in repo_client.poll_events(filters):
             t = ev.get("type")
             peer = ev.get("domain_name")
             try:

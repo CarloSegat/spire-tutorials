@@ -1,0 +1,11 @@
+{
+  "name": "oauth-metadata-store",
+  "private": true,
+  "scripts": {
+    "node:log": "hardhat node 2>&1 | tee ../hardhat.log"
+  },
+  "devDependencies": {
+    "hardhat": "^2.22.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0"
+  }
+}

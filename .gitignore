@@ -41,3 +41,4 @@ cache/
 # OAuth centralized pids
 oauth/centralized/pids/*.pid
 oauth/centralized/pids/*.json
+oauth/centralized/epochs/
