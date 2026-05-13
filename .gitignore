@@ -37,3 +37,7 @@ cache/
 
 *.pem
 *.csr
+
+# OAuth centralized pids
+oauth/centralized/pids/*.pid
+oauth/centralized/pids/*.json
