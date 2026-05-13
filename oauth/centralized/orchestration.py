@@ -88,6 +88,7 @@ def wait_metadata_repo(timeout=10):
 def start_workload(domain_index: int, idx: int, client_id: str, client_secret: str):
     name = workload_name(domain_index, idx)
     env = os.environ.copy()
+    peers_file = str(PID_DIR / f"peers-domain-{domain_index}.json")
     env.update({
         "CLIENT_ID": client_id,
         "CLIENT_SECRET": client_secret,
@@ -96,7 +97,7 @@ def start_workload(domain_index: int, idx: int, client_id: str, client_secret: s
         "DOMAIN_NAME": kc.realm_name(domain_index),
         "WORKLOAD_NAME": name,
         "PORT": str(workload_port(domain_index, idx)),
-        "METADATA_REPO_URL": "http://localhost:9080",
+        "PEERS_FILE": peers_file,
     })
     return _spawn(name, [str(WORKLOAD_BIN)], env=env)
 
@@ -142,16 +143,20 @@ def setup_domain(domain_index: int):
         secret = kc.create_service_account_client(domain_index, tok, cid)
         secrets[cid] = secret
 
+    _ensure_dirs()
+    (PID_DIR / f"secrets-domain-{domain_index}.json").write_text(json.dumps(secrets))
+
+    (PID_DIR / f"peers-domain-{domain_index}.json").write_text("{}")
+
+    start_listener(domain_index)
+    time.sleep(2)
+
     for idx in range(WORKLOADS_PER_DOMAIN):
         cid = workload_name(domain_index, idx)
         start_workload(domain_index, idx, cid, secrets[cid])
     for idx in range(WORKLOADS_PER_DOMAIN):
         wait_workload(domain_index, idx)
 
-    _ensure_dirs()
-    (PID_DIR / f"secrets-domain-{domain_index}.json").write_text(json.dumps(secrets))
-
-    start_listener(domain_index)
     return secrets
 
 

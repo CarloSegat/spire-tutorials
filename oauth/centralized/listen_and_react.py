@@ -15,6 +15,18 @@ from pathlib import Path
 
 import keycloak as kc
 import repo_client
+import json
+
+
+PIDS_DIR = Path(__file__).resolve().parent / "pids"
+
+
+def write_peers_file(domain_index: int, peers: dict):
+    """Write peers-domain-N.json with domain_name -> keycloak_url mapping."""
+    peers_file = PIDS_DIR / f"peers-domain-{domain_index}.json"
+    with open(peers_file, "w") as f:
+        json.dump(peers, f)
+    log(f"wrote peers file: {peers_file}")
 
 
 def setup_logging(domain_index: int):
@@ -75,6 +87,7 @@ def main():
     # with the snapshot are not double-handled.
     stream = repo_client.open_event_stream()
     seen = set()
+    peers = {}  # domain_name -> keycloak_url
     for m in repo_client.list_metadata():
         peer = m.get("DomainName")
         if peer == own_domain or peer in seen:
@@ -87,7 +100,9 @@ def main():
             "jwks_url": m.get("JWKSURL"),
         }
         handle_add(domain_index, own_domain, ev, tok)
+        peers[peer] = m.get("KeycloakURL")
         seen.add(peer)
+    write_peers_file(domain_index, peers)
 
     try:
         for ev in repo_client.iter_events(stream):
@@ -98,10 +113,14 @@ def main():
                     if peer in seen:
                         continue
                     handle_add(domain_index, own_domain, ev, tok)
+                    peers[peer] = ev.get("keycloak_url")
                     seen.add(peer)
+                    write_peers_file(domain_index, peers)
                 elif t == "domain_removed":
                     handle_remove(domain_index, own_domain, ev, tok)
+                    peers.pop(peer, None)
                     seen.discard(peer)
+                    write_peers_file(domain_index, peers)
             except Exception as e:
                 log(f"ERROR handling {t} {peer}: {e}")
     except KeyboardInterrupt:

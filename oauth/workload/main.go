@@ -24,7 +24,7 @@ type config struct {
 	domainName   string
 	workloadName string
 	port         string
-	metadataURL  string
+	peersFile    string
 }
 
 type tokenResp struct {
@@ -74,7 +74,7 @@ func loadConfig() config {
 		domainName:   mustEnv("DOMAIN_NAME"),
 		workloadName: mustEnv("WORKLOAD_NAME"),
 		port:         mustEnv("PORT"),
-		metadataURL:  mustEnv("METADATA_REPO_URL"),
+		peersFile:    mustEnv("PEERS_FILE"),
 	}
 	return c
 }
@@ -293,30 +293,24 @@ func lookupKeycloakURL(domain string) (string, error) {
 	}
 	metaMu.Unlock()
 
-	u := fmt.Sprintf("%s/metadata?federation_id=%s", cfg.metadataURL, cfg.federationID)
-	resp, err := http.Get(u)
+	// Read from local peers file written by listener
+	data, err := os.ReadFile(cfg.peersFile)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-	var lr struct {
-		Metadata []struct {
-			DomainName  string `json:"DomainName"`
-			KeycloakURL string `json:"KeycloakURL"`
-		} `json:"Metadata"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&lr); err != nil {
+	var peers map[string]string
+	if err := json.Unmarshal(data, &peers); err != nil {
 		return "", err
 	}
 	metaMu.Lock()
 	defer metaMu.Unlock()
-	for _, m := range lr.Metadata {
-		metaCache[m.DomainName] = m.KeycloakURL
+	for d, url := range peers {
+		metaCache[d] = url
 	}
 	if u, ok := metaCache[domain]; ok {
 		return u, nil
 	}
-	return "", fmt.Errorf("domain %s not in metadata", domain)
+	return "", fmt.Errorf("domain %s not in peers file", domain)
 }
 
 func postForm(u string, form url.Values) (*tokenResp, int, error) {
