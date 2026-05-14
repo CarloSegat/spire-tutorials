@@ -6,6 +6,7 @@
            AND introspection of a pre-removal exchanged token returns active:false.
 """
 
+import os
 import sys
 import time
 
@@ -59,7 +60,7 @@ def peer_state_clean(peer_dom: int, fid_peer_alias: str) -> bool:
         return False
     if r.json().get("enabled", True):
         return False
-    # client notBefore > 0?
+    # client disabled + notBefore > 0?
     uuid = kc.get_client_uuid(peer_dom, tok, fid_peer_alias)
     if uuid is None:
         return True
@@ -70,7 +71,10 @@ def peer_state_clean(peer_dom: int, fid_peer_alias: str) -> bool:
     )
     if r.status_code != 200:
         return False
-    nb = r.json().get("notBefore", 0)
+    client = r.json()
+    if client.get("enabled", True):
+        return False
+    nb = client.get("notBefore", 0)
     return nb and nb > 0
 
 
@@ -82,31 +86,68 @@ def run_removal():
 
     target = kc.realm_name(REMOVE_DOMAIN)
     alias = f"{orch.FEDERATION_ID}-{target}"
+    peers = [p for p in range(1, n + 1) if p != REMOVE_DOMAIN]
+
+    # Warm workload token caches so we measure real cache-expiry delay
+    for p in peers:
+        try:
+            orch.call_pair(REMOVE_DOMAIN, 0, p, 0)
+        except Exception:
+            pass
 
     print(f"[removal] removing {target}", file=sys.stderr)
     t_start = orch.record_epoch("removal_start")
     import repo_client
     repo_client.delete(target)
 
-    # Poll every remaining peer until disabled+notBefore set
-    pending = [p for p in range(1, n + 1) if p != REMOVE_DOMAIN]
+    # Poll propagation and zero communication simultaneously
+    pending_prop = list(peers)
     cleaned = {}
-    deadline = time.time() + 60
-    while pending and time.time() < deadline:
-        for p in list(pending):
+    t_zero = None
+    no_intro = os.environ.get("NO_INTROSPECTION") == "1"
+    deadline = time.time() + (600 if no_intro else 120)
+    while time.time() < deadline:
+        # Check propagation
+        for p in list(pending_prop):
             if peer_state_clean(p, alias):
                 cleaned[p] = time.time()
-                pending.remove(p)
-        if pending:
-            time.sleep(0.1)
-    if pending:
-        print(f"ERROR: removal never reflected at {pending}", file=sys.stderr)
+                pending_prop.remove(p)
+
+        # Check zero communication (drive calls from removed domain)
+        if t_zero is None:
+            any_success = False
+            for p in peers:
+                try:
+                    status, _ = orch.call_pair(REMOVE_DOMAIN, 0, p, 0, timeout=3)
+                    if status == 200:
+                        any_success = True
+                except Exception:
+                    pass
+            if not any_success:
+                t_zero = time.time()
+
+        elapsed = time.time() - t_start
+        prop_done = len(peers) - len(pending_prop)
+        print(f"\r[removal] {elapsed:.0f}s  prop={prop_done}/{len(peers)}  zero={'yes' if t_zero else 'no'}",
+              end="", file=sys.stderr, flush=True)
+
+        if not pending_prop and t_zero is not None:
+            print(file=sys.stderr)
+            break
+        time.sleep(0.3)
+
+    if pending_prop:
+        print(f"ERROR: removal never reflected at {pending_prop}", file=sys.stderr)
         sys.exit(1)
 
     t_stop = max(cleaned.values())
     orch.record_epoch("removal_stop", t_stop)
-    print(f"[removal] elapsed = {t_stop - t_start:.3f}s", file=sys.stderr)
-    print(f"{t_stop - t_start:.3f}")
+    orch.record_epoch("zero_communication_stop", t_zero)
+
+    removal_s = t_stop - t_start
+    zero_s = t_zero - t_start
+    print(f"[removal] propagation = {removal_s:.3f}s", file=sys.stderr)
+    print(f"[removal] zero_communication = {zero_s:.3f}s", file=sys.stderr)
 
 
 if __name__ == "__main__":

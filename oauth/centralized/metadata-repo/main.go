@@ -42,6 +42,7 @@ func main() {
 	mux.HandleFunc("POST /metadata/register", register)
 	mux.HandleFunc("DELETE /metadata", del)
 	mux.HandleFunc("GET /metadata", list)
+	mux.HandleFunc("POST /metadata/key-rotated", keyRotated)
 	mux.HandleFunc("GET /events", streamEvents)
 	addr := fmt.Sprintf(":%d", port)
 	fmt.Printf("oauth-metadata-repo listening on %s\n", addr)
@@ -103,6 +104,29 @@ func del(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 	fmt.Printf("removed %s from %s\n", req.DomainName, req.FederationID)
+}
+
+func keyRotated(w http.ResponseWriter, r *http.Request) {
+	var req DeleteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.FederationID == "" || req.DomainName == "" {
+		http.Error(w, "FederationID and DomainName required", http.StatusBadRequest)
+		return
+	}
+	storageMux.Lock()
+	m, ok := storage[req.FederationID][req.DomainName]
+	storageMux.Unlock()
+	if !ok {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	broadcast("key_rotated", req.FederationID, m)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "notified"})
+	fmt.Printf("key_rotated %s in %s\n", req.DomainName, req.FederationID)
 }
 
 func list(w http.ResponseWriter, r *http.Request) {

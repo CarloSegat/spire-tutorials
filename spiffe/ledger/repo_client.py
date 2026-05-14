@@ -150,35 +150,26 @@ def get_bundles():
     return out
 
 
-def stream_events(poll_interval=1.0):
+def stream_events(poll_interval=0.5):
     """Subscribe to the contract's bundle events as a generator.
 
-    Polls `BundlePosted`/`BundleUpdated` as `bundle_updated` and
-    `BundleDeleted` as `bundle_deleted`, matching the event types the
-    centralized SSE stream used.
-
-    Args:
-        poll_interval: seconds between `get_new_entries` polls.
+    Uses block-range scanning instead of filters to avoid Hardhat
+    silently expiring filters and dropping events.
     """
     c = _contract()
-    # web3.py v7 renamed fromBlock -> from_block; try the new spelling first,
-    # fall back to the v6 form for older installs.
-    try:
-        posted = c.events.BundlePosted.create_filter(from_block="latest")
-        updated = c.events.BundleUpdated.create_filter(from_block="latest")
-        deleted = c.events.BundleDeleted.create_filter(from_block="latest")
-    except TypeError:
-        posted = c.events.BundlePosted.create_filter(fromBlock="latest")
-        updated = c.events.BundleUpdated.create_filter(fromBlock="latest")
-        deleted = c.events.BundleDeleted.create_filter(fromBlock="latest")
+    w3 = _w3_client()
+    last_block = w3.eth.block_number
 
     while True:
-        for log in posted.get_new_entries():
-            yield {"type": "bundle_updated", "data": {"trust_domain": log["args"]["trustDomain"]}}
-        for log in updated.get_new_entries():
-            yield {"type": "bundle_updated", "data": {"trust_domain": log["args"]["trustDomain"]}}
-        for log in deleted.get_new_entries():
-            yield {"type": "bundle_deleted", "data": {"trust_domain": log["args"]["trustDomain"]}}
+        current = w3.eth.block_number
+        if current > last_block:
+            for ev in c.events.BundlePosted.get_logs(from_block=last_block + 1, to_block=current):
+                yield {"type": "bundle_updated", "data": {"trust_domain": ev["args"]["trustDomain"]}}
+            for ev in c.events.BundleUpdated.get_logs(from_block=last_block + 1, to_block=current):
+                yield {"type": "bundle_updated", "data": {"trust_domain": ev["args"]["trustDomain"]}}
+            for ev in c.events.BundleDeleted.get_logs(from_block=last_block + 1, to_block=current):
+                yield {"type": "bundle_deleted", "data": {"trust_domain": ev["args"]["trustDomain"]}}
+            last_block = current
         time.sleep(poll_interval)
 
 

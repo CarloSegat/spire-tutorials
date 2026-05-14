@@ -14,6 +14,7 @@ import requests
 
 import keycloak as kc
 import orchestration as orch
+import repo_client
 
 ROTATE_DOMAIN = 1
 
@@ -101,6 +102,9 @@ def run_rotation():
 
     alias = f"{orch.FEDERATION_ID}-{kc.realm_name(ROTATE_DOMAIN)}"
 
+    repo_client.notify_key_rotated(kc.realm_name(ROTATE_DOMAIN))
+    print("[rotation] notified peers via event channel", file=sys.stderr)
+
     secrets = orch.load_domain_secrets(ROTATE_DOMAIN)
     src_cid = orch.workload_name(ROTATE_DOMAIN, 0)
     src_secret = secrets[src_cid]
@@ -109,12 +113,8 @@ def run_rotation():
     pending = [p for p in range(1, n + 1) if p != ROTATE_DOMAIN]
     deadline = time.time() + 60
     while pending and time.time() < deadline:
-        # Fresh subject token each loop ensures it's signed by the current
-        # active key on the rotating domain.
         subj = mint_fresh_subject_token(ROTATE_DOMAIN, src_cid, src_secret)
         for p in list(pending):
-            ptok = kc.admin_token(p)
-            kc.reload_idp_keys(p, ptok, alias)
             status = try_exchange_at_peer(p, alias, subj)
             if status == 200:
                 propagated[p] = time.time()

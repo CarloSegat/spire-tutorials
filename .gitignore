@@ -38,7 +38,8 @@ cache/
 *.pem
 *.csr
 
-# OAuth centralized pids
-oauth/centralized/pids/*.pid
-oauth/centralized/pids/*.json
+# OAuth runtime artifacts (both variants)
+oauth/centralized/pids/
 oauth/centralized/epochs/
+oauth/ledger/pids/
+oauth/ledger/epochs/

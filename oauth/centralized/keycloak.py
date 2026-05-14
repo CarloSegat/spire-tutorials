@@ -294,6 +294,20 @@ def disable_idp(domain_index: int, tok: str, alias: str):
     r.raise_for_status()
 
 
+def disable_client(domain_index: int, tok: str, client_id: str):
+    realm = realm_name(domain_index)
+    uuid = get_client_uuid(domain_index, tok, client_id)
+    if uuid is None:
+        return
+    r = requests.put(
+        f"{kc_url(domain_index)}/admin/realms/{realm}/clients/{uuid}",
+        headers=_hdrs(tok),
+        json={"enabled": False},
+        timeout=10,
+    )
+    r.raise_for_status()
+
+
 def _realm_mgmt_uuid(domain_index: int, tok: str) -> str:
     realm = realm_name(domain_index)
     r = requests.get(

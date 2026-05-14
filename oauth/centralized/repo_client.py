@@ -33,6 +33,12 @@ def delete(domain_name: str):
     r.raise_for_status()
 
 
+def notify_key_rotated(domain_name: str):
+    body = {"FederationID": FEDERATION_ID, "DomainName": domain_name}
+    r = requests.post(f"{REPO_URL}/metadata/key-rotated", json=body, timeout=10)
+    r.raise_for_status()
+
+
 def list_metadata():
     r = requests.get(f"{REPO_URL}/metadata", params={"federation_id": FEDERATION_ID}, timeout=10)
     r.raise_for_status()

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import keycloak as kc
 import repo_client
-from listener_handlers import setup_logging, log, write_peers_file, handle_add, handle_remove
+from listener_handlers import setup_logging, log, write_peers_file, handle_add, handle_remove, handle_key_rotated
 
 VARIANT_DIR = Path(__file__).resolve().parent
 PIDS_DIR = VARIANT_DIR / "pids"
@@ -70,6 +70,8 @@ def main():
                     peers.pop(peer, None)
                     seen.discard(peer)
                     write_peers_file(domain_index, peers, PIDS_DIR)
+                elif t == "key_rotated":
+                    handle_key_rotated(domain_index, own_domain, ev, tok, kc)
             except Exception as e:
                 log(f"ERROR handling {t} {peer}: {e}")
     except KeyboardInterrupt:

@@ -55,4 +55,16 @@ def handle_remove(domain_index: int, own_domain: str, ev: dict, tok: str, kc):
     log(f"peer_remove {peer} {time.time()}")
     kc.disable_idp(domain_index, tok, name)
     kc.set_client_not_before(domain_index, tok, name, int(time.time()))
+    kc.disable_client(domain_index, tok, name)
     log(f"peer_revoked {peer} {time.time()}")
+
+
+def handle_key_rotated(domain_index: int, own_domain: str, ev: dict, tok: str, kc):
+    peer = ev.get("domain_name")
+    if peer == own_domain:
+        return
+    fid = ev.get("federation_id")
+    name = f"{fid}-{peer}"
+    log(f"peer_key_rotated {peer} {time.time()}")
+    kc.reload_idp_keys(domain_index, tok, name)
+    log(f"peer_keys_reloaded {peer} {time.time()}")

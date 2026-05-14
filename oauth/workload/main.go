@@ -1,7 +1,7 @@
 package main
 
 import (
-	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,20 +11,18 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 type config struct {
-	clientID     string
-	clientSecret string
-	keycloakURL  string
-	federationID string
-	domainName   string
-	workloadName string
-	port         string
-	peersFile    string
+	clientID        string
+	clientSecret    string
+	keycloakURL     string
+	federationID    string
+	domainName      string
+	workloadName    string
+	port            string
+	peersFile       string
+	noIntrospection bool
 }
 
 type tokenResp struct {
@@ -47,9 +45,6 @@ var (
 	exchangeMu sync.Mutex
 	exchange   = map[string]*cachedToken{} // key: target_domain|target_url
 
-	jwksMu    sync.Mutex
-	jwksCache jwk.Set
-
 	metaMu    sync.Mutex
 	metaCache = map[string]string{} // domain_name -> keycloak_url
 )
@@ -67,14 +62,18 @@ func main() {
 
 func loadConfig() config {
 	c := config{
-		clientID:     mustEnv("CLIENT_ID"),
-		clientSecret: mustEnv("CLIENT_SECRET"),
-		keycloakURL:  mustEnv("KEYCLOAK_URL"),
-		federationID: mustEnv("FEDERATION_ID"),
-		domainName:   mustEnv("DOMAIN_NAME"),
-		workloadName: mustEnv("WORKLOAD_NAME"),
-		port:         mustEnv("PORT"),
-		peersFile:    mustEnv("PEERS_FILE"),
+		clientID:        mustEnv("CLIENT_ID"),
+		clientSecret:    mustEnv("CLIENT_SECRET"),
+		keycloakURL:     mustEnv("KEYCLOAK_URL"),
+		federationID:    mustEnv("FEDERATION_ID"),
+		domainName:      mustEnv("DOMAIN_NAME"),
+		workloadName:    mustEnv("WORKLOAD_NAME"),
+		port:            mustEnv("PORT"),
+		peersFile:       mustEnv("PEERS_FILE"),
+		noIntrospection: os.Getenv("NO_INTROSPECTION") == "1",
+	}
+	if c.noIntrospection {
+		fmt.Printf("workload %s: stateless JWT validation (no introspection)\n", c.workloadName)
 	}
 	return c
 }
@@ -105,40 +104,60 @@ func handleAPI(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "ok from %s/%s\n", cfg.domainName, cfg.workloadName)
 }
 
+type introspectResp struct {
+	Active bool `json:"active"`
+}
+
 func validateToken(raw string) error {
-	set := getJWKS(false)
-	tok, err := jwt.Parse([]byte(raw), jwt.WithKeySet(set))
-	if err != nil {
-		// retry once with refreshed JWKS in case of unknown kid
-		set = getJWKS(true)
-		tok, err = jwt.Parse([]byte(raw), jwt.WithKeySet(set))
-		if err != nil {
-			return err
-		}
+	if cfg.noIntrospection {
+		return validateTokenStateless(raw)
 	}
-	if tok.Expiration().Before(time.Now()) {
-		return fmt.Errorf("expired")
+	introspectURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token/introspect",
+		cfg.keycloakURL, cfg.domainName)
+	form := url.Values{}
+	form.Set("token", raw)
+	form.Set("client_id", cfg.clientID)
+	form.Set("client_secret", cfg.clientSecret)
+
+	c := &http.Client{Timeout: 5 * time.Second}
+	resp, err := c.PostForm(introspectURL, form)
+	if err != nil {
+		return fmt.Errorf("introspection request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("introspection returned %d: %s", resp.StatusCode, string(body))
+	}
+	var ir introspectResp
+	if err := json.Unmarshal(body, &ir); err != nil {
+		return fmt.Errorf("introspection parse: %w", err)
+	}
+	if !ir.Active {
+		return fmt.Errorf("token not active")
 	}
 	return nil
 }
 
-func getJWKS(forceRefresh bool) jwk.Set {
-	jwksMu.Lock()
-	defer jwksMu.Unlock()
-	if jwksCache != nil && !forceRefresh {
-		return jwksCache
+func validateTokenStateless(raw string) error {
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 {
+		return fmt.Errorf("not a JWT")
 	}
-	url := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs", cfg.keycloakURL, cfg.domainName)
-	set, err := jwk.Fetch(context.Background(), url)
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "jwks fetch failed: %v\n", err)
-		if jwksCache != nil {
-			return jwksCache
-		}
-		return jwk.NewSet()
+		return fmt.Errorf("decode payload: %w", err)
 	}
-	jwksCache = set
-	return set
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return fmt.Errorf("parse claims: %w", err)
+	}
+	if time.Now().Unix() >= claims.Exp {
+		return fmt.Errorf("token expired")
+	}
+	return nil
 }
 
 // ---------- outbound: drive cross-domain call ----------

@@ -41,6 +41,7 @@ def main():
     t_mesh_stop = read_epoch("post_rotation_mesh_stop")
     t_removal_start = read_epoch("removal_start")
     t_removal_stop = read_epoch("removal_stop")
+    t_zero_comm_stop = read_epoch("zero_communication_stop")
 
     # Compute metrics
     creation_s = t_creation_stop - t_creation_start
@@ -49,9 +50,10 @@ def main():
     propagation_s = t_propagation_stop - t_rotation_stop
     mesh_after_rotation_s = t_mesh_stop - t_propagation_stop
     removal_s = t_removal_stop - t_removal_start
+    zero_communication_s = t_zero_comm_stop - t_removal_start
 
     # Prepare row
-    row = ["centralized", n, creation_s, addition_s, rotation_call_s, propagation_s, mesh_after_rotation_s, removal_s]
+    row = ["centralized", n, creation_s, addition_s, rotation_call_s, propagation_s, mesh_after_rotation_s, removal_s, zero_communication_s]
 
     # Check if results.csv exists; if not, write header
     csv_path = "results.csv"
@@ -60,7 +62,7 @@ def main():
     with open(csv_path, "a", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(["variant", "n", "creation_s", "addition_s", "rotation_call_s", "propagation_s", "mesh_after_rotation_s", "removal_s"])
+            writer.writerow(["variant", "n", "creation_s", "addition_s", "rotation_call_s", "propagation_s", "mesh_after_rotation_s", "removal_s", "zero_communication_s"])
         writer.writerow(row)
 
     # Print to stdout in human-readable form
@@ -71,6 +73,7 @@ def main():
     print(f"  propagation: {propagation_s:.3f}s")
     print(f"  mesh_after_rotation: {mesh_after_rotation_s:.3f}s")
     print(f"  removal: {removal_s:.3f}s")
+    print(f"  zero_communication: {zero_communication_s:.3f}s")
     print(f"\nAppended to {csv_path}")
 
 if __name__ == "__main__":

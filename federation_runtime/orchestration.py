@@ -20,23 +20,28 @@ import spire_utils
 LISTENER_SCRIPT = Path(__file__).parent / "listen_and_react.py"
 
 
-def poll_until(measure_fn, *args, sleep=2, on_success=None, on_retry=None):
+def poll_until(measure_fn, *args, sleep=2, on_success=None, on_retry=None,
+               timeout=300):
     """Repeatedly call `measure_fn(*args)` until it stops raising RuntimeError.
 
     Used to wait for an experiment's end markers to appear in the
     workload/listener logs. Returns whatever the measure function
     returns once it succeeds.
     """
-    while True:
+    deadline = time.time() + timeout
+    last_err = None
+    while time.time() < deadline:
         try:
             result = measure_fn(*args)
             if on_success is not None:
                 on_success(result)
             return result
         except RuntimeError as e:
+            last_err = e
             if on_retry is not None:
                 on_retry(e)
             time.sleep(sleep)
+    raise RuntimeError(f"poll_until timed out after {timeout}s: {last_err}")
 
 
 def start_listener(server_num, max_server):

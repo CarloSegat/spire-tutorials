@@ -89,6 +89,15 @@ def delete(domain_name: str):
         raise
 
 
+def notify_key_rotated(domain_name: str):
+    try:
+        _send(_contract().functions.notifyKeyRotated(domain_name))
+        print(f"notify_key_rotated {domain_name}: 200 ok", file=sys.stderr)
+    except Exception as e:
+        print(f"notify_key_rotated {domain_name}: 500 {e}", file=sys.stderr)
+        raise
+
+
 def get_domain(domain_name: str) -> dict:
     raw = _contract().functions.getDomain(domain_name).call()
     return json.loads(raw)
@@ -110,39 +119,51 @@ def list_metadata():
 
 
 def create_event_filters():
-    """Create log filters from current block. Call BEFORE backfill."""
+    """Snapshot current block number. Call BEFORE backfill."""
+    return _w3_client().eth.block_number
+
+
+def poll_events(from_block, poll_interval=0.1):
+    """Yield events using block-range scanning (no expiring filters)."""
     c = _contract()
-    return {
-        "added": c.events.DomainAdded.create_filter(from_block="latest"),
-        "removed": c.events.DomainRemoved.create_filter(from_block="latest"),
-    }
+    w3 = _w3_client()
+    last_block = from_block
 
-
-def poll_events(filters, poll_interval=0.1):
-    """Yield events from pre-created filters."""
     while True:
         try:
-            for log_entry in filters["added"].get_new_entries():
-                domain_name = log_entry["args"]["domainName"]
-                meta = get_domain(domain_name)
-                yield {
-                    "type": "domain_added",
-                    "federation_id": FEDERATION_ID,
-                    "domain_name": meta["DomainName"],
-                    "keycloak_url": meta["KeycloakURL"],
-                    "jwks_url": meta["JWKSURL"],
-                }
-            for log_entry in filters["removed"].get_new_entries():
-                yield {
-                    "type": "domain_removed",
-                    "federation_id": FEDERATION_ID,
-                    "domain_name": log_entry["args"]["domainName"],
-                }
+            current = w3.eth.block_number
+            if current > last_block:
+                for log_entry in c.events.DomainAdded.get_logs(from_block=last_block + 1, to_block=current):
+                    domain_name = log_entry["args"]["domainName"]
+                    try:
+                        meta = get_domain(domain_name)
+                    except Exception:
+                        continue
+                    yield {
+                        "type": "domain_added",
+                        "federation_id": FEDERATION_ID,
+                        "domain_name": meta["DomainName"],
+                        "keycloak_url": meta["KeycloakURL"],
+                        "jwks_url": meta["JWKSURL"],
+                    }
+                for log_entry in c.events.DomainRemoved.get_logs(from_block=last_block + 1, to_block=current):
+                    yield {
+                        "type": "domain_removed",
+                        "federation_id": FEDERATION_ID,
+                        "domain_name": log_entry["args"]["domainName"],
+                    }
+                for log_entry in c.events.KeyRotated.get_logs(from_block=last_block + 1, to_block=current):
+                    yield {
+                        "type": "key_rotated",
+                        "federation_id": FEDERATION_ID,
+                        "domain_name": log_entry["args"]["domainName"],
+                    }
+                last_block = current
         except Exception as e:
             print(f"[repo_client] poll error: {e}, retrying", file=sys.stderr)
         time.sleep(poll_interval)
 
 
 def stream_events(poll_interval=0.1):
-    """Convenience: create filters and poll."""
+    """Convenience: snapshot block and poll."""
     yield from poll_events(create_event_filters(), poll_interval)

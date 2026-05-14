@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -e
 
-N="${1:-3}"
+N=3
+for arg in "$@"; do
+  case "$arg" in
+    --no-introspection) export NO_INTROSPECTION=1 ;;
+    *) N="$arg" ;;
+  esac
+done
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 

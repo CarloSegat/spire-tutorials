@@ -14,6 +14,7 @@ contract OAuthMetadataStore {
 
     event DomainAdded  (string domainName);
     event DomainRemoved(string domainName);
+    event KeyRotated   (string domainName);
 
     function registerDomain(string calldata domainName, string calldata rawJSON) external {
         require(!domainExists[domainName], "exists");
@@ -39,6 +40,11 @@ contract OAuthMetadataStore {
         delete metadata[domainName];
         delete domainExists[domainName];
         emit DomainRemoved(domainName);
+    }
+
+    function notifyKeyRotated(string calldata domainName) external {
+        require(domainExists[domainName], "missing");
+        emit KeyRotated(domainName);
     }
 
     function exists(string calldata domainName) external view returns (bool) {

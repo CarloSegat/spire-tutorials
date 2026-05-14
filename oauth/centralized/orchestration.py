@@ -99,6 +99,8 @@ def start_workload(domain_index: int, idx: int, client_id: str, client_secret: s
         "PORT": str(workload_port(domain_index, idx)),
         "PEERS_FILE": peers_file,
     })
+    if os.environ.get("NO_INTROSPECTION"):
+        env["NO_INTROSPECTION"] = "1"
     return _spawn(name, [str(WORKLOAD_BIN)], env=env)
 
 
@@ -135,7 +137,8 @@ def setup_domain(domain_index: int):
     kc.wait_ready(domain_index)
     tok = kc.admin_token(domain_index)
     kc.bump_master_token_lifespan(domain_index, tok)
-    kc.create_realm(domain_index, tok)
+    ttl = 30 if os.environ.get("NO_INTROSPECTION") else 300
+    kc.create_realm(domain_index, tok, access_token_ttl=ttl)
 
     secrets = {}
     for idx in range(WORKLOADS_PER_DOMAIN):
@@ -189,6 +192,16 @@ def wait_peer_registered_at(domain_index: int, peer_domain: str, timeout=30) -> 
 
 
 def call_pair(src_dom: int, src_idx: int, tgt_dom: int, tgt_idx: int, timeout=5):
+    """Drive a full cross-domain workload-to-workload call.
+
+    Hits src's workload HTTP server at POST /call, which triggers this chain:
+      1. src workload gets a client_credentials token from src's Keycloak
+      2. src workload performs RFC 8693 token exchange at tgt's Keycloak,
+         swapping the src token for a tgt-realm token
+      3. src workload calls tgt workload's GET /api with the exchanged token
+      4. tgt workload introspects the token against its own Keycloak
+    Returns (http_status, response_body). 200 = full chain succeeded.
+    """
     body = {
         "target_domain": kc.realm_name(tgt_dom),
         "target_url": workload_url(tgt_dom, tgt_idx),
@@ -197,7 +210,8 @@ def call_pair(src_dom: int, src_idx: int, tgt_dom: int, tgt_idx: int, timeout=5)
     return r.status_code, r.text
 
 
-def drive_full_mesh(n: int, max_workers: int = 100, retry_sleep: float = 0.1):
+def drive_full_mesh(n: int, max_workers: int = 100, retry_sleep: float = 0.1,
+                    timeout: float = 120):
     """Drive every (src_dom, src_idx) -> (tgt_dom, tgt_idx) pair across distinct domains.
 
     Retries failures with `retry_sleep` cadence until all pairs succeed.
@@ -214,9 +228,11 @@ def drive_full_mesh(n: int, max_workers: int = 100, retry_sleep: float = 0.1):
 
     last_ok = {}
 
+    deadline = time.time() + timeout
+
     def attempt(pair):
         sd, si, td, ti = pair
-        while True:
+        while time.time() < deadline:
             try:
                 status, _ = call_pair(sd, si, td, ti)
                 if status == 200:
@@ -224,11 +240,22 @@ def drive_full_mesh(n: int, max_workers: int = 100, retry_sleep: float = 0.1):
             except requests.RequestException:
                 pass
             time.sleep(retry_sleep)
+        return None
 
+    failed = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
-        for fut in concurrent.futures.as_completed([ex.submit(attempt, p) for p in pairs]):
-            pair, ts = fut.result()
-            last_ok[pair] = ts
+        futs = {ex.submit(attempt, p): p for p in pairs}
+        for fut in concurrent.futures.as_completed(futs, timeout=timeout + 10):
+            result = fut.result()
+            if result is None:
+                failed.append(futs[fut])
+            else:
+                pair, ts = result
+                last_ok[pair] = ts
+
+    if failed:
+        print(f"ERROR: {len(failed)}/{len(pairs)} pairs never succeeded: {failed[:5]}", file=sys.stderr)
+        raise RuntimeError(f"drive_full_mesh timed out: {len(failed)} pairs failed")
 
     return max(last_ok.values())
 
